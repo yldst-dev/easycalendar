@@ -32,11 +32,16 @@ export async function POST(request: Request) {
   }
 
   // Use vision-capable model for image processing, fallback to text-only model
-  const hasImages = body.messages.some(msg =>
-    msg.attachments && msg.attachments.some(att => att.type?.startsWith('image/'))
+  const hasImages = body.messages.some(
+    (msg) => msg.attachments && msg.attachments.some((att) => att.type?.startsWith("image/")),
   );
-  const model = process.env.OPENROUTER_MODEL?.trim() ||
-    (hasImages ? "openai/gpt-4o-mini" : "x-ai/grok-4-fast:free");
+  const textModelOverride = process.env.OPENROUTER_MODEL?.trim();
+  const visionModelOverride = process.env.OPENROUTER_VISION_MODEL?.trim();
+  const defaultTextModel = "x-ai/grok-4-fast:free";
+  const defaultVisionModel = "openai/gpt-4o-mini";
+  const model = hasImages
+    ? visionModelOverride || textModelOverride || defaultVisionModel
+    : textModelOverride || defaultTextModel;
 
   // Add current date and time context to system prompt
   const now = new Date();
@@ -52,6 +57,9 @@ export async function POST(request: Request) {
   const currentDateISO = now.toISOString();
 
   const enhancedSystemPrompt = `${SYSTEM_PROMPT}
+
+### Future Scheduling Guardrail
+- EasyCalendar는 현재 시각(${currentDateTime}) 이전 일정은 허용하지 않습니다. 과거 일정은 안내만 하고 items는 비워 두세요.
 
 ### Current Context
 - 현재 날짜 및 시간: ${currentDateTime} (한국 시간)

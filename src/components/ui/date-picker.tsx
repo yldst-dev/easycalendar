@@ -20,6 +20,7 @@ interface DateTimePickerProps {
   onChange?: (value: string) => void
   placeholder?: string
   className?: string
+  showTime?: boolean
 }
 
 export function DateTimePicker({
@@ -27,6 +28,7 @@ export function DateTimePicker({
   onChange,
   placeholder = "날짜와 시간을 선택하세요",
   className,
+  showTime = true,
 }: DateTimePickerProps) {
   const [open, setOpen] = React.useState(false)
   const [date, setDate] = React.useState<Date | undefined>(
@@ -36,11 +38,30 @@ export function DateTimePicker({
     value ? format(new Date(value), "HH:mm") : ""
   )
 
+  React.useEffect(() => {
+    if (!value) {
+      setDate(undefined)
+      setTimeValue("")
+      return
+    }
+
+    const next = new Date(value)
+    if (Number.isNaN(next.getTime())) {
+      return
+    }
+
+    setDate(next)
+    setTimeValue(format(next, "HH:mm"))
+  }, [value])
+
   const handleDateSelect = (selectedDate: Date | undefined) => {
     if (selectedDate) {
       const [hours, minutes] = timeValue.split(":").map(Number)
       if (!isNaN(hours) && !isNaN(minutes)) {
         selectedDate.setHours(hours, minutes)
+      } else if (!showTime) {
+        const existing = date ?? new Date()
+        selectedDate.setHours(existing.getHours(), existing.getMinutes())
       }
       setDate(selectedDate)
       onChange?.(selectedDate.toISOString())
@@ -48,6 +69,7 @@ export function DateTimePicker({
   }
 
   const handleTimeChange = (time: string) => {
+    if (!showTime) return
     setTimeValue(time)
     if (date) {
       const [hours, minutes] = time.split(":").map(Number)
@@ -68,28 +90,32 @@ export function DateTimePicker({
           className={cn(
             "w-full justify-start text-left font-normal h-11 rounded-full border border-border bg-background px-4",
             !date && "text-muted-foreground",
-            className
+            className,
           )}
         >
           <CalendarIcon className="mr-2 h-4 w-4" />
           {date ? (
-            format(date, "yyyy년 MM월 dd일 HH:mm", { locale: ko })
+            showTime
+              ? format(date, "yyyy년 MM월 dd일 HH:mm", { locale: ko })
+              : format(date, "yyyy년 MM월 dd일", { locale: ko })
           ) : (
             <span>{placeholder}</span>
           )}
         </Button>
       </PopoverTrigger>
       <PopoverContent className="w-auto p-0" align="start">
-        <div className="p-3 border-b">
-          <div className="flex items-center gap-2">
-            <Input
-              type="time"
-              value={timeValue}
-              onChange={(e) => handleTimeChange(e.target.value)}
-              className="w-auto"
-            />
+        {showTime ? (
+          <div className="p-3 border-b">
+            <div className="flex items-center gap-2">
+              <Input
+                type="time"
+                value={timeValue}
+                onChange={(e) => handleTimeChange(e.target.value)}
+                className="w-auto"
+              />
+            </div>
           </div>
-        </div>
+        ) : null}
         <Calendar
           mode="single"
           selected={date}

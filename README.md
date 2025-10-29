@@ -1,36 +1,18 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+## EasyCalendar
 
-## Getting Started
+EasyCalendar는 자연어로 일정을 생성하고 다듬을 수 있는 Next.js 기반 캘린더 도우미입니다. 사용자는 채팅창에 원하는 계획을 입력하거나 이미지를 업로드하여 AI에게 빠르게 일정을 요청하고, 결과는 우측 미리보기 패널에서 바로 확인할 수 있습니다.
 
-First, run the development server:
+### 주요 기능
+- **AI 대화형 일정 생성**: OpenRouter를 통해 다양한 모델과 연동하여 자연어 명령에서 일정을 추출합니다.
+- **실시간 미리보기 편집**: 생성된 일정 제목, 위치, 메모 등을 인라인으로 수정하고, 종일/시간 단위 전환, 종료 시간 초기화 등을 직관적으로 수행할 수 있습니다.
+- **파일 첨부 및 이미지 이해**: 이미지 속 정보까지 고려해 일정을 제안하도록 비전 모델을 선택적으로 사용할 수 있습니다.
+- **캘린더 정리와 내보내기**: 일정을 날짜별로 그룹화하여 보여주고, Google Calendar 추가나 ICS 파일로 내보내는 기능을 제공합니다.
+- **세션 저장 및 되돌리기**: 브라우저 세션에 자동 저장되고 삭제 시 되돌리기 토스트를 제공해 실수로 인한 손실을 줄입니다.
 
+### 실행 방법
 ```bash
+npm install
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
-
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
-
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
-
-## Learn More
-
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+브라우저에서 [http://localhost:3000](http://localhost:3000)에 접속해 기능을 확인할 수 있습니다. OpenRouter API 키와 모델은 `.env.local` 파일에서 설정합니다.

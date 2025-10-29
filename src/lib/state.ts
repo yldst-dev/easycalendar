@@ -6,6 +6,7 @@ import {
   PlannerState,
   ScheduleItem,
 } from "@/lib/types";
+import { isFutureOrPresent } from "@/lib/datetime";
 
 const SCHEDULE_STORAGE_KEY = "easycalendar_schedule";
 
@@ -79,18 +80,19 @@ export const plannerReducer = (
       const schedule = action.payload as ScheduleItem[];
       return {
         ...state,
-        schedule,
+        schedule: sanitizeSchedule(schedule),
       };
     }
     case "ADD_SCHEDULE_ITEMS": {
-      const newItems = action.payload as ScheduleItem[];
+      const newItems = sanitizeSchedule(action.payload as ScheduleItem[]);
       // Filter out duplicate items based on title, start time, and location
-      const filteredNewItems = newItems.filter(newItem =>
-        !state.schedule.some(existingItem =>
-          existingItem.title === newItem.title &&
-          existingItem.start === newItem.start &&
-          existingItem.location === newItem.location
-        )
+      const filteredNewItems = newItems.filter((newItem) =>
+        !state.schedule.some(
+          (existingItem) =>
+            existingItem.title === newItem.title &&
+            existingItem.start === newItem.start &&
+            existingItem.location === newItem.location,
+        ),
       );
       return {
         ...state,
@@ -99,6 +101,9 @@ export const plannerReducer = (
     }
     case "UPDATE_SCHEDULE_ITEM": {
       const updatedItem = action.payload as ScheduleItem;
+      if (updatedItem.start && !isFutureOrPresent(updatedItem.start)) {
+        return state;
+      }
       return {
         ...state,
         schedule: state.schedule.map((item) =>
@@ -107,7 +112,8 @@ export const plannerReducer = (
       };
     }
     case "ADD_SCHEDULE_ITEM": {
-      const draft = action.payload as ScheduleItem;
+      const [draft] = sanitizeSchedule([action.payload as ScheduleItem]);
+      if (!draft) return state;
       return {
         ...state,
         schedule: [...state.schedule, draft],
@@ -157,3 +163,12 @@ export const createDraftMessage = (
   attachments,
   status: "sent",
 });
+
+function sanitizeSchedule(items: ScheduleItem[]): ScheduleItem[] {
+  const toleranceMs = 60 * 1000;
+  const reference = new Date(Date.now() - toleranceMs);
+  return items.filter((item) => {
+    if (!item || !item.start) return false;
+    return isFutureOrPresent(item.start, reference);
+  });
+}

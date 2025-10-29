@@ -10,7 +10,7 @@ import {
   useState,
 } from "react";
 import Image from "next/image";
-import { ImageIcon } from "lucide-react";
+import { ImageIcon, X as XIcon, MapPin, Trash2 } from "lucide-react";
 
 function GoogleCalendarIcon({ className }: { className?: string }) {
   return (
@@ -46,8 +46,9 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
 import { DateTimePicker } from "@/components/ui/date-picker";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Tooltip, TooltipContent } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 import {
   ConversationAttachment,
@@ -61,11 +62,9 @@ import {
   plannerReducer,
   saveScheduleToSession,
 } from "@/lib/state";
-import {
-  exportSingleItemAsIcs,
-  addToGoogleCalendar,
-} from "@/lib/exporters";
+import { exportSingleItemAsIcs, addToGoogleCalendar } from "@/lib/exporters";
 import { requestScheduleFromAi } from "@/lib/openrouter";
+import { isFutureOrPresent, parseDate, isBefore } from "@/lib/datetime";
 
 export default function Home() {
   const [state, dispatch] = useReducer(plannerReducer, undefined, createInitialState);
@@ -243,12 +242,20 @@ export default function Home() {
         createdAt: new Date().toISOString(),
       };
 
-      dispatch({ type: "ADD_MESSAGE", payload: assistantMessage });
-      dispatch({ type: "ADD_SCHEDULE_ITEMS", payload: aiPlan.items });
+      const now = new Date(Date.now() - 60 * 1000);
+      const filteredItems = (aiPlan.items ?? []).filter(
+        (item) => item.start && isFutureOrPresent(item.start, now),
+      );
+      const droppedCount = (aiPlan.items?.length ?? 0) - filteredItems.length;
 
-      // 일정이 실제로 추가된 경우에만 성공 토스트 표시
-      if (aiPlan.items && aiPlan.items.length > 0) {
+      dispatch({ type: "ADD_MESSAGE", payload: assistantMessage });
+      if (filteredItems.length > 0) {
+        dispatch({ type: "ADD_SCHEDULE_ITEMS", payload: filteredItems });
         showToast("AI 일정이 생성되었습니다.", "success");
+      }
+
+      if (droppedCount > 0) {
+        showToast(`${droppedCount}개의 과거 일정은 제외되었어요.`, "info");
       }
     } catch (error) {
       // AbortError인 경우 (사용자가 취소) 아무것도 하지 않음
@@ -293,32 +300,119 @@ export default function Home() {
 
   const handleItemChange = useCallback(
     (id: string, field: keyof ScheduleItem, value: string | boolean) => {
-      const current = state.schedule.find((item) => item.id === id) ?? { id };
-      let nextValue: ScheduleItem[keyof ScheduleItem];
+      const current = state.schedule.find((item) => item.id === id);
+      if (!current) return;
+
+      const updates: Partial<ScheduleItem> = {};
 
       if (field === "allDay") {
-        nextValue = Boolean(value);
-      } else if (field === "end" && value === "") {
-        nextValue = undefined;
-      } else {
-        nextValue = value as ScheduleItem[keyof ScheduleItem];
+        updates.allDay = Boolean(value);
+      } else if (field === "start") {
+        if (typeof value !== "string" || value.trim() === "") {
+          showToast("시작 시간을 다시 선택해 주세요.", "error");
+          return;
+        }
+        const nextStart = parseDate(value);
+        if (!nextStart || !isFutureOrPresent(nextStart)) {
+          showToast("과거 일정은 생성할 수 없어요.", "error");
+          return;
+        }
+        updates.start = value;
+
+        const currentEnd = parseDate(current.end);
+        if (currentEnd && isBefore(currentEnd, nextStart)) {
+          updates.end = undefined;
+        }
+      } else if (field === "end") {
+        if (value === "") {
+          updates.end = undefined;
+        } else if (typeof value === "string") {
+          const nextEnd = parseDate(value);
+          if (!nextEnd || !isFutureOrPresent(nextEnd)) {
+            showToast("종료 시간은 현재 이후로 설정해 주세요.", "error");
+            return;
+          }
+
+          const startDate = parseDate(current.start);
+          if (startDate && isBefore(nextEnd, startDate)) {
+            showToast("종료 시간은 시작 이후여야 해요.", "error");
+            return;
+          }
+
+          updates.end = value;
+        }
+      } else if (field === "title") {
+        updates.title = value as string;
+      } else if (field === "description") {
+        updates.description = value as string;
+      } else if (field === "location") {
+        updates.location = value as string;
+      }
+
+      if (Object.keys(updates).length === 0) {
+        return;
       }
 
       dispatch({
         type: "UPDATE_SCHEDULE_ITEM",
         payload: {
           ...current,
-          [field]: nextValue,
+          ...updates,
         },
       });
     },
-    [state.schedule],
+    [showToast, state.schedule],
   );
 
   const handleRemoveItem = useCallback((id: string) => {
+    // 삭제할 아이템을 찾아서 저장
+    const itemToRemove = state.schedule.find(item => item.id === id);
+
+    if (!itemToRemove) return;
+
+    // 아이템 삭제
     dispatch({ type: "REMOVE_SCHEDULE_ITEM", payload: id });
-    showToast("일정을 삭제했습니다.", "info");
-  }, [showToast]);
+
+    // 되돌리기 기능이 있는 토스트 표시
+    const undoAction = () => {
+      dispatch({ type: "ADD_SCHEDULE_ITEM", payload: itemToRemove });
+    };
+
+    setToast({
+      id: crypto.randomUUID(),
+      text: "일정을 삭제했습니다.",
+      tone: "info",
+      isClosing: false,
+      undoAction,
+      undoText: "되돌리기",
+      autoClose: true,
+      duration: 5000,
+    });
+  }, [state.schedule]);
+
+  const handleClearAllItems = useCallback(() => {
+    if (state.schedule.length === 0) {
+      showToast("삭제할 일정이 없습니다.", "info");
+      return;
+    }
+
+    const previousItems = state.schedule.map((item) => ({ ...item }));
+
+    dispatch({ type: "SET_SCHEDULE", payload: [] });
+
+    setToast({
+      id: crypto.randomUUID(),
+      text: "모든 일정을 삭제했습니다.",
+      tone: "info",
+      isClosing: false,
+      undoAction: () => {
+        dispatch({ type: "ADD_SCHEDULE_ITEMS", payload: previousItems });
+      },
+      undoText: "되돌리기",
+      autoClose: true,
+      duration: 5000,
+    });
+  }, [dispatch, showToast, state.schedule]);
 
   const cancelRequest = useCallback(() => {
     abortController?.abort();
@@ -416,7 +510,17 @@ export default function Home() {
                   )}
                 </div>
                 {state.isLoading ? <ShimmerSchedulePreview /> : null}
-                <div className="flex justify-end">
+                <div className="flex items-center justify-between">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={handleClearAllItems}
+                    disabled={state.schedule.length === 0}
+                    className="text-sm text-muted-foreground hover:text-foreground"
+                  >
+                    <Trash2 className="mr-1.5 h-4 w-4" />
+                    전체 삭제
+                  </Button>
                   <Button variant="secondary" size="sm" onClick={handleAddItem}>
                     새 일정 추가
                   </Button>
@@ -456,37 +560,48 @@ export default function Home() {
                                     className="block text-sm font-medium"
                                   />
                                   <TypewriterText
-                                    text={formatTimeRange(item.start, item.end)}
+                                    text={formatTimeRange(item.start, item.end, item.allDay)}
                                     as="span"
                                     className="block text-xs text-muted-foreground"
                                   />
                                   {item.location ? (
-                                    <TypewriterText
-                                      text={`@ ${item.location}`}
-                                      as="span"
-                                      className="block text-xs text-muted-foreground"
-                                    />
+                                    <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                                      <MapPin className="h-3.5 w-3.5" />
+                                      <TypewriterText
+                                        text={item.location}
+                                        as="span"
+                                        className="text-xs text-muted-foreground"
+                                      />
+                                    </div>
                                   ) : null}
                                 </div>
                                 <div className="flex items-center gap-1">
-                                  <Button
-                                    variant="ghost"
-                                    size="sm"
-                                    onClick={() => addToGoogleCalendar(item)}
-                                    className="h-8 w-8 p-0 hover:bg-blue-50"
-                                    title="구글 캘린더에 추가"
-                                  >
-                                    <GoogleCalendarIcon className="h-4 w-4" />
-                                  </Button>
-                                  <Button
-                                    variant="secondary"
-                                    size="sm"
-                                    onClick={() => exportSingleItemAsIcs(item)}
-                                    className="h-8 px-3 text-xs"
-                                    title="ICS 파일로 내보내기"
-                                  >
-                                    내보내기
-                                  </Button>
+                                  <Tooltip>
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      onClick={() => addToGoogleCalendar(item)}
+                                      className="h-8 w-8 p-0 hover:bg-blue-50"
+                                    >
+                                      <GoogleCalendarIcon className="h-4 w-4" />
+                                    </Button>
+                                    <TooltipContent side="top">
+                                      구글 캘린더에 추가
+                                    </TooltipContent>
+                                  </Tooltip>
+                                  <Tooltip>
+                                    <Button
+                                      variant="secondary"
+                                      size="sm"
+                                      onClick={() => exportSingleItemAsIcs(item)}
+                                      className="h-8 px-3 text-xs"
+                                    >
+                                      내보내기
+                                    </Button>
+                                    <TooltipContent side="top">
+                                      ICS 파일로 내보내기
+                                    </TooltipContent>
+                                  </Tooltip>
                                 </div>
                               </div>
                             </li>
@@ -509,6 +624,10 @@ export default function Home() {
           tone={toast.tone}
           isClosing={toast.isClosing}
           onClose={requestToastClose}
+          undoAction={toast.undoAction}
+          undoText={toast.undoText}
+          autoClose={toast.autoClose}
+          duration={toast.duration}
         />
       ) : null}
     </main>
@@ -861,6 +980,44 @@ function ScheduleEditor({
   onRemove: (id: string) => void;
 }) {
   const [isExpanded, setIsExpanded] = useState(false);
+  const [draftTitle, setDraftTitle] = useState(item.title);
+  const [draftLocation, setDraftLocation] = useState(item.location ?? "");
+  const [draftDescription, setDraftDescription] = useState(item.description ?? "");
+  const [draftAllDay, setDraftAllDay] = useState(Boolean(item.allDay));
+  const descriptionRef = useRef<HTMLTextAreaElement | null>(null);
+
+  useEffect(() => {
+    setDraftTitle(item.title);
+  }, [item.title]);
+
+  useEffect(() => {
+    setDraftLocation(item.location ?? "");
+  }, [item.location]);
+
+  useEffect(() => {
+    setDraftDescription(item.description ?? "");
+  }, [item.description]);
+
+  useEffect(() => {
+    setDraftAllDay(Boolean(item.allDay));
+  }, [item.allDay]);
+
+  const updateAllDay = useCallback(
+    (nextValue: boolean) => {
+      setDraftAllDay(nextValue);
+      if (Boolean(item.allDay) !== nextValue) {
+        onChange(item.id, "allDay", nextValue);
+      }
+    },
+    [item.allDay, item.id, onChange],
+  );
+
+  useEffect(() => {
+    if (!descriptionRef.current) return;
+    const el = descriptionRef.current;
+    el.style.height = "auto";
+    el.style.height = `${el.scrollHeight}px`;
+  }, [draftDescription]);
 
   return (
     <div className="flex flex-col rounded-3xl border border-border p-4 transition-all duration-300 ease-in-out hover:shadow-sm">
@@ -871,19 +1028,20 @@ function ScheduleEditor({
           </h3>
           <p className="text-xs text-muted-foreground">
             <TypewriterText
-              text={formatTimeRange(item.start, item.end)}
+              text={formatTimeRange(item.start, item.end, item.allDay)}
               as="span"
               className="text-xs text-muted-foreground"
             />
           </p>
           {item.location ? (
-            <p className="text-xs text-muted-foreground">
+            <div className="flex items-center gap-1 text-xs text-muted-foreground">
+              <MapPin className="h-3.5 w-3.5" />
               <TypewriterText
-                text={`@ ${item.location}`}
+                text={item.location}
                 as="span"
                 className="text-xs text-muted-foreground"
               />
-            </p>
+            </div>
           ) : null}
         </div>
         <div className="flex items-center gap-2">
@@ -919,11 +1077,46 @@ function ScheduleEditor({
       }`}>
         <div className="mt-4 flex flex-col gap-3">
           <Input
-            value={item.title}
-            onChange={(event) => onChange(item.id, "title", event.target.value)}
+            value={draftTitle}
+            onChange={(event) => setDraftTitle(event.target.value)}
+            onBlur={() => {
+              if (draftTitle !== item.title) {
+                onChange(item.id, "title", draftTitle);
+              }
+            }}
             placeholder="일정 제목"
           />
           <div className="grid grid-cols-1 gap-3">
+            <div className="flex flex-col gap-1">
+              <span className="text-xs text-muted-foreground">
+                종일 이벤트
+              </span>
+              <div
+                className="flex items-center gap-3 rounded-3xl border border-border bg-background px-4 py-3 cursor-pointer"
+                role="button"
+                tabIndex={0}
+                onClick={() => updateAllDay(!draftAllDay)}
+                onKeyDown={(event) => {
+                  if (event.key === " " || event.key === "Enter") {
+                    event.preventDefault();
+                    updateAllDay(!draftAllDay);
+                  }
+                }}
+                aria-pressed={draftAllDay}
+              >
+                <Checkbox
+                  checked={draftAllDay}
+                  onCheckedChange={(checked) => {
+                    updateAllDay(checked === true);
+                  }}
+                  aria-label="종일 일정 여부"
+                  onClick={(event) => event.stopPropagation()}
+                />
+                <span className="text-sm text-foreground">
+                  하루 종일 진행
+                </span>
+              </div>
+            </div>
             <div className="flex flex-col gap-1">
               <Label htmlFor={`start-${item.id}`} className="text-xs text-muted-foreground">
                 시작
@@ -932,17 +1125,34 @@ function ScheduleEditor({
                 value={item.start}
                 onChange={(value) => onChange(item.id, "start", value)}
                 placeholder="시작 날짜와 시간을 선택하세요"
+                showTime={!draftAllDay}
               />
             </div>
             <div className="flex flex-col gap-1">
               <Label htmlFor={`end-${item.id}`} className="text-xs text-muted-foreground">
                 종료 (선택)
               </Label>
-              <DateTimePicker
-                value={item.end || ""}
-                onChange={(value) => onChange(item.id, "end", value)}
-                placeholder="종료 날짜와 시간을 선택하세요"
-              />
+              <div className="flex items-center gap-2">
+                <DateTimePicker
+                  value={item.end || ""}
+                  onChange={(value) => onChange(item.id, "end", value)}
+                  placeholder="종료 날짜와 시간을 선택하세요"
+                  showTime={!draftAllDay}
+                  className="flex-1"
+                />
+                {item.end ? (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    className="h-9 w-9 text-muted-foreground hover:text-foreground"
+                    onClick={() => onChange(item.id, "end", "")}
+                    aria-label="종료 시간 지우기"
+                  >
+                    <XIcon className="h-4 w-4" />
+                  </Button>
+                ) : null}
+              </div>
             </div>
             <div className="flex flex-col gap-1">
               <Label htmlFor={`location-${item.id}`} className="text-xs text-muted-foreground">
@@ -950,9 +1160,14 @@ function ScheduleEditor({
               </Label>
               <Input
                 id={`location-${item.id}`}
-                value={item.location ?? ""}
+                value={draftLocation}
                 placeholder="장소 또는 링크"
-                onChange={(event) => onChange(item.id, "location", event.target.value)}
+                onChange={(event) => setDraftLocation(event.target.value)}
+                onBlur={() => {
+                  if ((item.location ?? "") !== draftLocation) {
+                    onChange(item.id, "location", draftLocation);
+                  }
+                }}
               />
             </div>
             <div className="flex flex-col gap-1">
@@ -961,22 +1176,27 @@ function ScheduleEditor({
               </Label>
               <textarea
                 id={`description-${item.id}`}
-                value={item.description ?? ""}
+                ref={descriptionRef}
+                value={draftDescription}
                 placeholder="요약, 준비물 등"
                 onChange={(event) => {
-                  onChange(item.id, "description", event.target.value);
-                  // 자동 높이 조절
-                  event.target.style.height = 'auto';
-                  event.target.style.height = event.target.scrollHeight + 'px';
+                  setDraftDescription(event.target.value);
+                  event.target.style.height = "auto";
+                  event.target.style.height = `${event.target.scrollHeight}px`;
                 }}
                 onInput={(event) => {
                   // 자동 높이 조절
                   const target = event.target as HTMLTextAreaElement;
-                  target.style.height = 'auto';
-                  target.style.height = target.scrollHeight + 'px';
+                  target.style.height = "auto";
+                  target.style.height = `${target.scrollHeight}px`;
+                }}
+                onBlur={() => {
+                  if ((item.description ?? "") !== draftDescription) {
+                    onChange(item.id, "description", draftDescription);
+                  }
                 }}
                 className="w-full rounded-3xl border border-border bg-background px-4 py-3 text-sm text-foreground placeholder:text-muted-foreground focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-60 resize-none min-h-[80px] overflow-hidden"
-                style={{ height: 'auto' }}
+                style={{ height: "auto" }}
               />
             </div>
           </div>
@@ -1012,7 +1232,13 @@ function formatDateLabel(date: string) {
   });
 }
 
-function formatTimeRange(start: string, end?: string) {
+function formatTimeRange(start: string, end?: string, allDay?: boolean) {
+  if (allDay) {
+    return "종일";
+  }
+  if (!start) {
+    return "";
+  }
   const startDate = new Date(start);
   const endDate = end ? new Date(end) : undefined;
   const startLabel = startDate.toLocaleTimeString(undefined, {
@@ -1028,25 +1254,16 @@ function formatTimeRange(start: string, end?: string) {
   return endLabel ? `${startLabel} - ${endLabel}` : startLabel;
 }
 
-function toDatetimeLocalInput(value: string) {
-  const date = new Date(value);
-  if (Number.isNaN(date.valueOf())) return "";
-  const pad = (num: number) => String(num).padStart(2, "0");
-  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
-}
-
-function fromDatetimeLocalInput(value: string) {
-  if (!value) return undefined;
-  const date = new Date(value);
-  if (Number.isNaN(date.valueOf())) return undefined;
-  return date.toISOString();
-}
 
 type ToastMessage = {
   id: string;
   text: string;
   tone: "success" | "error" | "info";
   isClosing?: boolean;
+  undoAction?: () => void;
+  undoText?: string;
+  autoClose?: boolean;
+  duration?: number;
 };
 
 function Toast({
@@ -1054,32 +1271,125 @@ function Toast({
   tone,
   isClosing,
   onClose,
+  undoAction,
+  undoText,
+  autoClose = true,
+  duration = 5000,
 }: {
   message: string;
   tone: ToastMessage["tone"];
   isClosing?: boolean;
   onClose: () => void;
+  undoAction?: () => void;
+  undoText?: string;
+  autoClose?: boolean;
+  duration?: number;
 }) {
+  const closeTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const remainingRef = useRef<number>(duration);
+  const lastTimerStartRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    if (closeTimerRef.current) {
+      clearTimeout(closeTimerRef.current);
+      closeTimerRef.current = null;
+    }
+    remainingRef.current = duration;
+    lastTimerStartRef.current = null;
+
+    if (!autoClose || isClosing) {
+      return () => {};
+    }
+
+    lastTimerStartRef.current = Date.now();
+    closeTimerRef.current = setTimeout(() => {
+      onClose();
+    }, remainingRef.current);
+
+    return () => {
+      if (closeTimerRef.current) {
+        clearTimeout(closeTimerRef.current);
+      }
+      closeTimerRef.current = null;
+      lastTimerStartRef.current = null;
+    };
+  }, [autoClose, duration, isClosing, onClose, message, tone, undoAction]);
+
+  const pauseTimer = useCallback(() => {
+    if (!autoClose || isClosing) return;
+    if (!closeTimerRef.current) return;
+    clearTimeout(closeTimerRef.current);
+    closeTimerRef.current = null;
+
+    if (lastTimerStartRef.current !== null) {
+      const elapsed = Date.now() - lastTimerStartRef.current;
+      remainingRef.current = Math.max(0, remainingRef.current - elapsed);
+    }
+  }, [autoClose, isClosing]);
+
+  const resumeTimer = useCallback(() => {
+    if (!autoClose || isClosing) return;
+    if (remainingRef.current <= 0) {
+      onClose();
+      return;
+    }
+
+    if (closeTimerRef.current) {
+      clearTimeout(closeTimerRef.current);
+    }
+
+    lastTimerStartRef.current = Date.now();
+    closeTimerRef.current = setTimeout(() => {
+      onClose();
+    }, remainingRef.current);
+  }, [autoClose, isClosing, onClose]);
+
+  const handleUndo = useCallback(() => {
+    if (undoAction) {
+      undoAction();
+      onClose();
+    }
+  }, [undoAction, onClose]);
+
   return (
-    <div className="pointer-events-none fixed bottom-8 left-1/2 z-50 w-full max-w-xs -translate-x-1/2 px-4">
+    <div className="pointer-events-none fixed bottom-8 left-1/2 z-50 w-full max-w-sm -translate-x-1/2 px-4">
       <div
         className={cn(
-          "pointer-events-auto flex items-center justify-between gap-3 rounded-full border px-5 py-3 text-sm font-medium backdrop-blur",
+          "pointer-events-auto flex items-center gap-3 rounded-2xl border px-4 py-3 text-sm font-medium backdrop-blur",
           isClosing ? "toast-exit" : "toast-enter",
           toastToneStyles[tone],
         )}
+        onMouseEnter={pauseTimer}
+        onMouseLeave={resumeTimer}
         style={{
           boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03)'
         }}
       >
-        <span>{message}</span>
-        <button
-          type="button"
-          className="text-xs font-semibold uppercase tracking-wide"
-          onClick={onClose}
-        >
-          닫기
-        </button>
+        <span className="flex-1">{message}</span>
+
+        <div className="flex items-center gap-2">
+          {undoAction ? (
+            <button
+              type="button"
+              className="text-xs font-semibold uppercase tracking-wide hover:opacity-70 transition-opacity"
+              onMouseEnter={pauseTimer}
+              onMouseLeave={resumeTimer}
+              onClick={handleUndo}
+            >
+              {undoText || "되돌리기"}
+            </button>
+          ) : (
+            <button
+              type="button"
+              className="text-xs font-semibold uppercase tracking-wide hover:opacity-70 transition-opacity"
+              onMouseEnter={pauseTimer}
+              onMouseLeave={resumeTimer}
+              onClick={onClose}
+            >
+              닫기
+            </button>
+          )}
+        </div>
       </div>
     </div>
   );
