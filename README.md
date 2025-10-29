@@ -18,3 +18,7 @@ npm run dev
 브라우저에서 [http://localhost:3000](http://localhost:3000)에 접속해 기능을 확인할 수 있습니다. OpenRouter API 키와 모델은 `.env.local` 파일에서 설정합니다.
 
 > **중요:** OpenRouter 설정의 **Training, Logging & Privacy** 탭에서 제공되는 두 옵션을 모두 활성화해야 무료 모델을 정상적으로 호출할 수 있습니다.
+
+### TODO
+- 과도한 요청을 제한하는 로직 추가 (AI 요청 비용 절감)
+- 자연어 날짜 표현(예: 다다음 주 수요일, 글피 등) 인식을 고도화하고 전용 호출 도구 구현
