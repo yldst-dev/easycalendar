@@ -436,7 +436,7 @@ export default function Home() {
   }, []);
 
   return (
-    <main className="min-h-screen bg-background px-4 py-6 pb-20 sm:py-10 lg:py-12 flex items-center justify-center">
+    <main className="min-h-screen bg-background px-4 py-6 sm:py-10 lg:py-12 flex items-center justify-center">
       <div className="mx-auto flex w-full max-w-6xl flex-col gap-6 sm:gap-8 lg:grid lg:grid-cols-[minmax(0,_3fr)_minmax(0,_2fr)] lg:items-start lg:gap-8 xl:gap-10">
         <section className="flex flex-col gap-4 lg:gap-6">
           <header className="flex flex-col gap-1">
