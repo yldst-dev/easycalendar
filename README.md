@@ -1,13 +1,24 @@
 ## EasyCalendar
 
+EasyCalendar는 자연어로 일정을 생성하고 다듬을 수 있는 Next.js 기반 캘린더 도우미입니다. 사용자는 채팅창에 원하는 계획을 입력하거나 이미지를 업로드하여 AI에게 빠르게 일정을 요청하고, 결과는 우측 미리보기 패널에서 바로 확인할 수 있습니다.
+
+### 쉽게 빠르게 일정 추가하기
 <div align="center">
-  <video width="600" controls>
-    <source src="readme_src/demo.mp4" type="video/mp4">
-    데모 비디오를 재생할 수 없습니다.
-  </video>
+  <img src="readme_src/1.png" width="400" style="margin: 10px;">
+  <img src="readme_src/2.png" width="400" style="margin: 10px;">
 </div>
 
-EasyCalendar는 자연어로 일정을 생성하고 다듬을 수 있는 Next.js 기반 캘린더 도우미입니다. 사용자는 채팅창에 원하는 계획을 입력하거나 이미지를 업로드하여 AI에게 빠르게 일정을 요청하고, 결과는 우측 미리보기 패널에서 바로 확인할 수 있습니다.
+### 이미지를 기반으로 일정 분석하고 추가하기
+<div align="center">
+  <img src="readme_src/3.png" width="400" style="margin: 10px;">
+  <img src="readme_src/4.png" width="400" style="margin: 10px;">
+</div>
+
+### 추가된 일정 수정 및 새로 추가 가능, ICS 파일 다운로드 및 구글 캘린더 내보내기 가능
+<div align="center">
+  <img src="readme_src/5.png" width="400" style="margin: 10px;">
+  <img src="readme_src/6.png" width="400" style="margin: 10px;">
+</div>
 
 ### 주요 기능
 - **AI 대화형 일정 생성**: OpenRouter를 통해 다양한 모델과 연동하여 자연어 명령에서 일정을 추출합니다.
