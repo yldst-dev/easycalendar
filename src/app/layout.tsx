@@ -9,6 +9,18 @@ export const metadata: Metadata = {
     shortcut: "/favicon.png",
     apple: "/favicon.png",
   },
+  openGraph: {
+    title: "일정을 쉽고 빠르게 채팅하듯이, EASYCALENDAR",
+    description: "Chat-based schedule assistant powered by OpenRouter",
+    siteName: "EasyCalendar",
+    type: "website",
+    locale: "ko_KR",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "일정을 쉽고 빠르게 채팅하듯이, EASYCALENDAR",
+    description: "Chat-based schedule assistant powered by OpenRouter",
+  },
 };
 
 const PRIVACY_POLICY_URL = process.env.NEXT_PUBLIC_PRIVACY_POLICY_URL?.trim();
