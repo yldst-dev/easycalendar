@@ -1,5 +1,12 @@
 ## EasyCalendar
 
+<div align="center">
+  <video width="600" controls>
+    <source src="readme_src/demo.mp4" type="video/mp4">
+    데모 비디오를 재생할 수 없습니다.
+  </video>
+</div>
+
 EasyCalendar는 자연어로 일정을 생성하고 다듬을 수 있는 Next.js 기반 캘린더 도우미입니다. 사용자는 채팅창에 원하는 계획을 입력하거나 이미지를 업로드하여 AI에게 빠르게 일정을 요청하고, 결과는 우측 미리보기 패널에서 바로 확인할 수 있습니다.
 
 ### 주요 기능
@@ -20,5 +27,7 @@ npm run dev
 > **중요:** OpenRouter 설정의 **Training, Logging & Privacy** 탭에서 제공되는 두 옵션을 모두 활성화해야 무료 모델을 정상적으로 호출할 수 있습니다.
 
 ### TODO
-- [] 과도한 요청을 제한하는 로직 추가 (AI 요청 비용 절감)
-- [] 자연어 날짜 표현(예: 다다음 주 수요일, 글피 등) 인식을 고도화하고 전용 호출 도구 구현
+- [ ] 과도한 요청을 제한하는 로직 추가 (AI 요청 비용 절감)
+- [ ] 자연어 날짜 표현(예: 다다음 주 수요일, 글피 등) 인식을 고도화하고 전용 호출 도구 구현
+- [ ] Cloudflare Turnstile 적용으로 악의적 사용 방지
+- [ ] 모바일 UIUX 개선하기
