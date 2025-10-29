@@ -78,12 +78,20 @@ export async function requestScheduleFromAi(
 
     const data = (await response.json()) as OpenRouterResponse;
     const content = data.choices?.[0]?.message?.content ?? "";
+    const modelId = (data as { model?: string }).model;
+    const timestamp = new Date().toISOString();
 
     // 빈 응답 처리
     if (!content.trim()) {
       return {
         summary: "AI 응답이 비어있습니다. 다시 시도해 주세요.",
         items: [],
+        meta: {
+          status: "error",
+          model: modelId,
+          timestamp,
+          note: "빈 응답",
+        },
       };
     }
 
@@ -96,6 +104,12 @@ export async function requestScheduleFromAi(
         return {
           summary: "유효한 JSON 응답을 찾을 수 없습니다. 다시 시도해 주세요.",
           items: [],
+          meta: {
+            status: "error",
+            model: modelId,
+            timestamp,
+            note: "JSON 파싱 실패",
+          },
         };
       }
 
@@ -106,6 +120,11 @@ export async function requestScheduleFromAi(
           ...item,
           id: item.id ?? crypto.randomUUID(),
         })),
+        meta: {
+          status: "success",
+          model: modelId,
+          timestamp,
+        },
       };
     } catch (parseError) {
       console.error("Failed to parse AI response as JSON:", content, parseError);
@@ -113,6 +132,12 @@ export async function requestScheduleFromAi(
       return {
         summary: "응답을 처리하지 못했습니다. 다시 시도해 주세요.",
         items: [],
+        meta: {
+          status: "error",
+          model: modelId,
+          timestamp,
+          note: "JSON 파싱 예외",
+        },
       };
     }
   } catch (error) {
@@ -122,7 +147,14 @@ export async function requestScheduleFromAi(
     }
     console.error("AI plan request failed", error);
     await pause();
-    return MOCK_PLAN;
+    return {
+      ...MOCK_PLAN,
+      meta: {
+        status: "fallback",
+        timestamp: new Date().toISOString(),
+        note: error instanceof Error ? error.message : String(error),
+      },
+    };
   }
 }
 

@@ -28,12 +28,24 @@ export interface ScheduleItem {
   allDay?: boolean;
 }
 
+export type LogStatus = "success" | "error";
+
+export interface PlannerLogEntry {
+  id: string;
+  timestamp: string;
+  status: LogStatus;
+  message: string;
+  details?: string;
+  model?: string;
+}
+
 export interface PlannerState {
   messages: ConversationMessage[];
   schedule: ScheduleItem[];
   selectedItemId?: string;
   isLoading: boolean;
   lastError?: string;
+  logs: PlannerLogEntry[];
 }
 
 export interface PlannerAction {
@@ -47,7 +59,9 @@ export interface PlannerAction {
     | "REMOVE_SCHEDULE_ITEM"
     | "SELECT_ITEM"
     | "SET_LOADING"
-    | "SET_ERROR";
+    | "SET_ERROR"
+    | "ADD_LOG_ENTRY"
+    | "CLEAR_LOGS";
   payload?: unknown;
 }
 
@@ -65,6 +79,12 @@ export interface AiSchedulePayload {
 export interface AiSchedule {
   summary: string;
   items: ScheduleItem[];
+  meta?: {
+    status: LogStatus | "fallback";
+    model?: string;
+    timestamp: string;
+    note?: string;
+  };
 }
 
 export interface ExportFormat {
