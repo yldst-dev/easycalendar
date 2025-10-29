@@ -3,7 +3,6 @@ import {
   ConversationAttachment,
   ConversationMessage,
   PlannerAction,
-  PlannerLogEntry,
   PlannerState,
   ScheduleItem,
 } from "@/lib/types";
@@ -42,7 +41,6 @@ export const createInitialState = (): PlannerState => ({
   ],
   schedule: [], // Start with empty schedule to avoid hydration mismatch
   isLoading: false,
-  logs: [],
 });
 
 export const plannerReducer = (
@@ -147,19 +145,6 @@ export const plannerReducer = (
       return {
         ...state,
         lastError: action.payload as string | undefined,
-      };
-    }
-    case "ADD_LOG_ENTRY": {
-      const entry = action.payload as PlannerLogEntry;
-      return {
-        ...state,
-        logs: [...state.logs, entry],
-      };
-    }
-    case "CLEAR_LOGS": {
-      return {
-        ...state,
-        logs: [],
       };
     }
     default:

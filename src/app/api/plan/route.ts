@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { SYSTEM_PROMPT } from "@/lib/prompts";
 import { withAttachmentContext } from "@/lib/message-utils";
+import { logOpenRouterEvent } from "@/lib/server/logger";
 import type { ConversationMessage } from "@/lib/types";
 
 const OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions";
@@ -110,26 +111,53 @@ export async function POST(request: Request) {
 
   const origin = request.headers.get("origin") ?? "https://easycalendar.local";
 
-  const response = await fetch(OPENROUTER_URL, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      "Content-Type": "application/json",
-      "HTTP-Referer": origin,
-      "X-Title": "EasyCalendar",
-    },
-    body: JSON.stringify(payload),
-    // OpenRouter recommends identifying the origin
-    next: { revalidate: 0 },
-  });
+  let response: Response;
+  try {
+    response = await fetch(OPENROUTER_URL, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+        "HTTP-Referer": origin,
+        "X-Title": "EasyCalendar",
+      },
+      body: JSON.stringify(payload),
+      next: { revalidate: 0 },
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    logOpenRouterEvent({
+      status: "error",
+      message: "OpenRouter 요청을 전송하지 못했습니다.",
+      model,
+      details: message,
+    });
+    return NextResponse.json({ error: "Failed to reach OpenRouter." }, { status: 502 });
+  }
+
+  const requestId = response.headers.get("x-request-id") ?? undefined;
 
   if (!response.ok) {
     const errorText = await response.text();
+    logOpenRouterEvent({
+      status: "error",
+      message: `OpenRouter 응답 오류 (${response.status})`,
+      model,
+      details: errorText,
+      requestId,
+    });
     return NextResponse.json(
       { error: `OpenRouter error: ${response.status}`, detail: errorText },
       { status: response.status },
     );
   }
+
+  logOpenRouterEvent({
+    status: "success",
+    message: "OpenRouter 요청이 성공했습니다.",
+    model,
+    requestId,
+  });
 
   const data = await response.json();
   return NextResponse.json(data);

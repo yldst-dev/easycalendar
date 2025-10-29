@@ -10,7 +10,7 @@ import {
   useState,
 } from "react";
 import Image from "next/image";
-import { AlertTriangle, CheckCircle2, ImageIcon, MapPin, Trash2, X as XIcon } from "lucide-react";
+import { ImageIcon, X as XIcon, MapPin, Trash2 } from "lucide-react";
 
 function GoogleCalendarIcon({ className }: { className?: string }) {
   return (
@@ -53,7 +53,6 @@ import { cn } from "@/lib/utils";
 import {
   ConversationAttachment,
   ConversationMessage,
-  PlannerLogEntry,
   ScheduleItem,
 } from "@/lib/types";
 import {
@@ -66,7 +65,6 @@ import {
 import { exportSingleItemAsIcs, addToGoogleCalendar } from "@/lib/exporters";
 import { requestScheduleFromAi } from "@/lib/openrouter";
 import { isFutureOrPresent, parseDate, isBefore } from "@/lib/datetime";
-import { createLogEntry, resolveModelLabel } from "@/lib/logger";
 
 export default function Home() {
   const [state, dispatch] = useReducer(plannerReducer, undefined, createInitialState);
@@ -237,30 +235,6 @@ export default function Home() {
         return;
       }
 
-      if (aiPlan.meta) {
-        const modelLabel = resolveModelLabel(aiPlan.meta.model);
-        const baseLabel = modelLabel ? `모델 ${modelLabel}` : "OpenRouter";
-        const status = aiPlan.meta.status === "success" ? "success" : "error";
-        let message = `${baseLabel} 호출 성공`;
-
-        if (aiPlan.meta.status === "fallback") {
-          message = `${baseLabel} 호출 실패 - 기본 일정 사용`;
-        } else if (aiPlan.meta.status === "error") {
-          message = `${baseLabel} 응답 처리 실패`;
-        }
-
-        dispatch({
-          type: "ADD_LOG_ENTRY",
-          payload: createLogEntry({
-            status,
-            message,
-            details: aiPlan.meta.note,
-            model: modelLabel,
-            timestamp: aiPlan.meta.timestamp,
-          }),
-        });
-      }
-
       const assistantMessage: ConversationMessage = {
         id: crypto.randomUUID(),
         role: "assistant",
@@ -283,21 +257,6 @@ export default function Home() {
       if (droppedCount > 0) {
         showToast(`${droppedCount}개의 과거 일정은 제외되었어요.`, "info");
       }
-
-      if (!aiPlan.meta) {
-        const status = filteredItems.length > 0 ? "success" : "error";
-        const message =
-          status === "success"
-            ? "OpenRouter 호출이 성공했어요."
-            : "OpenRouter 응답에서 유효한 일정을 찾지 못했어요.";
-        dispatch({
-          type: "ADD_LOG_ENTRY",
-          payload: createLogEntry({
-            status,
-            message,
-          }),
-        });
-      }
     } catch (error) {
       // AbortError인 경우 (사용자가 취소) 아무것도 하지 않음
       if (error instanceof Error && error.name === "AbortError") {
@@ -317,14 +276,6 @@ export default function Home() {
       });
       const message = error instanceof Error ? error.message : String(error);
       showToast(message, "error");
-      dispatch({
-        type: "ADD_LOG_ENTRY",
-        payload: createLogEntry({
-          status: "error",
-          message: "OpenRouter 요청이 실패했습니다.",
-          details: message,
-        }),
-      });
     } finally {
       // 취소되지 않은 경우에만 로딩 상태 해제
       if (!controller.signal.aborted) {
@@ -462,11 +413,6 @@ export default function Home() {
       duration: 5000,
     });
   }, [dispatch, showToast, state.schedule]);
-
-  const handleClearLogs = useCallback(() => {
-    dispatch({ type: "CLEAR_LOGS" });
-    showToast("로그를 초기화했습니다.", "info");
-  }, [dispatch, showToast]);
 
   const cancelRequest = useCallback(() => {
     abortController?.abort();
@@ -668,8 +614,6 @@ export default function Home() {
                 {state.isLoading ? <ShimmerCalendarView /> : null}
               </CardContent>
             </Card>
-
-            <CommunicationLogCard logs={state.logs} onClear={handleClearLogs} />
           </div>
         </section>
       </div>
@@ -1262,69 +1206,6 @@ function ScheduleEditor({
   );
 }
 
-function CommunicationLogCard({
-  logs,
-  onClear,
-}: {
-  logs: PlannerLogEntry[];
-  onClear: () => void;
-}) {
-  const hasLogs = logs.length > 0;
-  const entries = hasLogs ? [...logs].slice(-5).reverse() : [];
-
-  return (
-    <Card className="flex flex-col transition-all duration-300 ease-in-out">
-      <CardHeader className="flex items-center justify-between gap-2">
-        <h2 className="text-lg font-semibold">OpenRouter 로그</h2>
-        <Button
-          type="button"
-          variant="ghost"
-          size="sm"
-          onClick={onClear}
-          disabled={!hasLogs}
-          className="text-xs text-muted-foreground hover:text-foreground"
-        >
-          초기화
-        </Button>
-      </CardHeader>
-      <CardContent className="flex flex-col gap-3">
-        {!hasLogs ? (
-          <p className="rounded-2xl border border-dashed border-border px-4 py-3 text-center text-xs text-muted-foreground">
-            아직 통신 로그가 없습니다. AI 요청을 실행해 보세요.
-          </p>
-        ) : (
-          entries.map((entry) => <CommunicationLogRow key={entry.id} entry={entry} />)
-        )}
-      </CardContent>
-    </Card>
-  );
-}
-
-function CommunicationLogRow({ entry }: { entry: PlannerLogEntry }) {
-  const icon =
-    entry.status === "success" ? (
-      <CheckCircle2 className="mt-0.5 h-4 w-4 flex-shrink-0 text-emerald-500" />
-    ) : (
-      <AlertTriangle className="mt-0.5 h-4 w-4 flex-shrink-0 text-amber-500" />
-    );
-
-  const descriptors: string[] = [formatLogTimestamp(entry.timestamp)];
-  if (entry.model) descriptors.push(entry.model);
-
-  return (
-    <div className="flex items-start gap-3 rounded-2xl border border-border bg-muted/30 px-4 py-3">
-      {icon}
-      <div className="flex flex-1 flex-col gap-1">
-        <span className="text-sm font-medium text-foreground">{entry.message}</span>
-        <span className="text-xs text-muted-foreground">{descriptors.join(" • ")}</span>
-        {entry.details ? (
-          <span className="text-xs text-muted-foreground whitespace-pre-wrap">{entry.details}</span>
-        ) : null}
-      </div>
-    </div>
-  );
-}
-
 function EmptyState() {
   return (
     <div className="rounded-3xl border border-dashed border-border px-4 py-3 text-center text-sm text-muted-foreground">
@@ -1371,21 +1252,6 @@ function formatTimeRange(start: string, end?: string, allDay?: boolean) {
       })
     : "";
   return endLabel ? `${startLabel} - ${endLabel}` : startLabel;
-}
-
-function formatLogTimestamp(isoString: string) {
-  const date = new Date(isoString);
-  if (Number.isNaN(date.getTime())) {
-    return isoString;
-  }
-  return date.toLocaleString(undefined, {
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-    second: "2-digit",
-  });
 }
 
 
