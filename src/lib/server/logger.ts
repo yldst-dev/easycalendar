@@ -1,19 +1,21 @@
 import { randomUUID } from "node:crypto";
 
-export type OpenRouterLogStatus = "success" | "error";
+export type AiLogStatus = "success" | "error";
+export type AiLogSource = "openrouter" | "groq";
 
-export interface OpenRouterLogEvent {
-  status: OpenRouterLogStatus;
+export interface AiLogEvent {
+  source: AiLogSource;
+  status: AiLogStatus;
   message: string;
   model?: string;
   details?: string;
   requestId?: string;
 }
 
-export function logOpenRouterEvent(event: OpenRouterLogEvent) {
+export function logAiEvent(event: AiLogEvent) {
   const timestamp = new Date().toISOString();
   const payload = {
-    source: "openrouter",
+    source: event.source,
     status: event.status,
     message: event.message,
     model: event.model ?? "unknown",

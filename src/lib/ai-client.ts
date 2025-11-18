@@ -1,16 +1,16 @@
 "use client";
 
-import { AiSchedule, ConversationMessage, ScheduleItem } from "@/lib/types";
+import { AiProviderPreference, AiSchedule, ConversationMessage, ScheduleItem } from "@/lib/types";
 
-interface OpenRouterChoice {
+interface AiChoice {
   message?: {
     role?: string;
     content?: string;
   };
 }
 
-interface OpenRouterResponse {
-  choices?: OpenRouterChoice[];
+interface AiResponse {
+  choices?: AiChoice[];
 }
 
 const MOCK_PLAN: AiSchedule = {
@@ -29,6 +29,7 @@ const MOCK_PLAN: AiSchedule = {
 
 export async function requestScheduleFromAi(
   messages: ConversationMessage[],
+  provider: AiProviderPreference,
   signal?: AbortSignal,
 ): Promise<AiSchedule> {
   try {
@@ -66,17 +67,17 @@ export async function requestScheduleFromAi(
       headers: {
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({ messages: processedMessages }),
+      body: JSON.stringify({ messages: processedMessages, provider }),
       signal,
     });
 
     if (!response.ok) {
       const data = await response.json().catch(() => ({}));
       const detail = typeof data.detail === "string" ? data.detail : undefined;
-      throw new Error(detail ?? data.error ?? "OpenRouter 요청에 실패했습니다.");
+      throw new Error(detail ?? data.error ?? "AI 요청에 실패했습니다.");
     }
 
-    const data = (await response.json()) as OpenRouterResponse;
+    const data = (await response.json()) as AiResponse;
     const content = data.choices?.[0]?.message?.content ?? "";
 
     // 빈 응답 처리

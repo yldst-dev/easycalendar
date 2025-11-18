@@ -11,7 +11,7 @@ EasyCalendar is a Next.js 15 application that allows users to create and manage 
 **Framework**: Next.js 15 with App Router and React 19
 **Styling**: Tailwind CSS with custom design system using shadcn/ui components
 **State Management**: React useReducer with centralized state in `src/lib/state.ts`
-**AI Integration**: OpenRouter API through `/api/plan` route for natural language processing
+**AI Integration**: `/api/plan` dynamically selects Groq (Llama 4 multimodal) or OpenRouter models for natural language + vision processing, and the chat UI exposes a provider toggle in the conversation header.
 **UI Library**: Lucide React icons with shadcn/ui components styled with "new-york" theme
 
 ### Key Directories
@@ -21,7 +21,7 @@ EasyCalendar is a Next.js 15 application that allows users to create and manage 
 
 ### Core Data Flow
 1. User input → Reducer actions in `src/lib/state.ts`
-2. AI requests → `/api/plan/route.ts` → OpenRouter API
+2. AI requests → `/api/plan/route.ts` → Groq or OpenRouter API (depending on env config)
 3. Schedule generation → State updates → UI re-renders
 4. Export functionality → `src/lib/exporters.ts` (JSON/ICS formats)
 
@@ -36,8 +36,12 @@ npm run lint    # Run ESLint
 
 ## Environment Variables Required
 
-- `OPENROUTER_API_KEY` - Required for AI functionality
-- `OPENROUTER_MODEL` - Optional, defaults to "x-ai/grok-4-fast"
+- `PLANNER_AI_PROVIDER` – `openrouter`, `groq`, or `auto` (default). `auto` prefers Groq when `GROQ_API_KEY` is present.
+- `NEXT_PUBLIC_DEFAULT_AI_PROVIDER` – Mirrors the server default for the UI toggle. If omitted, the selector defaults to `auto`.
+- `GROQ_API_KEY` – Needed to call Groq's low-latency Llama 4 models (optional unless provider requires it).
+- `GROQ_MODEL` / `GROQ_VISION_MODEL` – Override Groq text vs. VLM defaults.
+- `OPENROUTER_API_KEY` – Still required when running in OpenRouter-only mode or as fallback.
+- `OPENROUTER_MODEL` / `OPENROUTER_VISION_MODEL` – Override OpenRouter defaults.
 
 ## Key Implementation Details
 
@@ -47,7 +51,7 @@ npm run lint    # Run ESLint
 
 **UI Components**: Built with shadcn/ui using Tailwind CSS variables for theming. Components support Korean language interface with proper image attachment handling.
 
-**AI Integration**: Conversations are processed through OpenRouter with image attachment support. The system prompt and message utilities are in `src/lib/prompts.ts` and `src/lib/message-utils.ts`.
+**AI Integration**: Conversations are proxied through `/api/plan`, which chooses Groq's Llama 4 Maverick for multimodal inputs or OpenRouter models as configured. Users can override in real time via the "모델 제공자" selector (stored in `localStorage`). The system prompt and message utilities are in `src/lib/prompts.ts` and `src/lib/message-utils.ts`.
 
 ## Code Quality Checks
 

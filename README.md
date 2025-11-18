@@ -21,7 +21,7 @@ EasyCalendar는 자연어로 일정을 생성하고 다듬을 수 있는 Next.js
 </div>
 
 ### 주요 기능
-- **AI 대화형 일정 생성**: OpenRouter를 통해 다양한 모델과 연동하여 자연어 명령에서 일정을 추출합니다.
+- **AI 대화형 일정 생성**: Groq Llama 4 VLM과 OpenRouter 생태계 모델을 상황에 맞게 선택해 자연어·이미지 입력에서 일정을 추출합니다. 대화창 우측 상단의 "모델 제공자" 드롭다운에서 즉시 공급자를 바꿀 수 있습니다.
 - **실시간 미리보기 편집**: 생성된 일정 제목, 위치, 메모 등을 인라인으로 수정하고, 종일/시간 단위 전환, 종료 시간 초기화 등을 직관적으로 수행할 수 있습니다.
 - **파일 첨부 및 이미지 이해**: 이미지 속 정보까지 고려해 일정을 제안하도록 비전 모델을 선택적으로 사용할 수 있습니다.
 - **캘린더 정리와 내보내기**: 일정을 날짜별로 그룹화하여 보여주고, Google Calendar 추가나 ICS 파일로 내보내는 기능을 제공합니다.
@@ -33,9 +33,21 @@ npm install
 npm run dev
 ```
 
-브라우저에서 [http://localhost:3000](http://localhost:3000)에 접속해 기능을 확인할 수 있습니다. OpenRouter API 키와 모델은 `.env.local` 파일에서 설정합니다.
+브라우저에서 [http://localhost:3000](http://localhost:3000)에 접속해 기능을 확인할 수 있습니다. `.env.local`에서 Groq/OpenRouter 키 및 `PLANNER_AI_PROVIDER`를 설정하면 됩니다.
 
-> **중요:** OpenRouter 설정의 **Training, Logging & Privacy** 탭에서 제공되는 두 옵션을 모두 활성화해야 무료 모델을 정상적으로 호출할 수 있습니다.
+#### AI Provider 설정
+| 변수 | 설명 |
+| --- | --- |
+| `PLANNER_AI_PROVIDER` | `openrouter`, `groq`, `auto` 중 선택. 기본값 `auto`는 Groq 키가 있으면 Llama 4(VLM) 모델을 우선 사용하고, 없으면 OpenRouter로 자동 폴백합니다. |
+| `NEXT_PUBLIC_DEFAULT_AI_PROVIDER` | 클라이언트 대화창 드롭다운의 기본 표시값. 보통 `PLANNER_AI_PROVIDER`와 동일하게 맞춥니다. |
+| `GROQ_API_KEY` | Groq Console에서 발급. 이미지+텍스트 모두 처리 가능한 `meta-llama/llama-4-maverick-17b-128e-instruct`가 기본입니다. |
+| `GROQ_MODEL`, `GROQ_VISION_MODEL` | 텍스트/멀티모달 모델 ID 커스터마이즈. 미설정 시 각각 70B 텍스트 모델과 Llama 4 VLM을 사용합니다. |
+| `OPENROUTER_API_KEY` | 기존과 동일. Groq가 응답하지 않거나 auto 모드에서 키가 없을 때 사용됩니다. |
+| `OPENROUTER_MODEL`, `OPENROUTER_VISION_MODEL` | 텍스트/이미지 모델 기본값을 덮어씁니다. |
+
+> **Tip:** 사용자는 대화창에서 즉시 공급자를 바꿀 수 있으므로, 운영 환경에서는 두 API 키를 모두 넣고 `PLANNER_AI_PROVIDER=auto`로 두면 장애 시 자동 폴백합니다.
+
+> **중요:** OpenRouter를 사용하는 경우, **Training, Logging & Privacy** 탭에서 제공되는 두 옵션을 모두 활성화해야 무료 모델을 정상적으로 호출할 수 있습니다.
 
 ### TODO
 - [ ] 과도한 요청을 제한하는 로직 추가 (AI 요청 비용 절감)

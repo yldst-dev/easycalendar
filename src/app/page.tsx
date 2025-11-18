@@ -49,8 +49,17 @@ import { Label } from "@/components/ui/label";
 import { DateTimePicker } from "@/components/ui/date-picker";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Tooltip, TooltipContent } from "@/components/ui/tooltip";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectItemText,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 import {
+  AiProviderPreference,
   ConversationAttachment,
   ConversationMessage,
   ScheduleItem,
@@ -63,8 +72,49 @@ import {
   saveScheduleToSession,
 } from "@/lib/state";
 import { exportSingleItemAsIcs, addToGoogleCalendar } from "@/lib/exporters";
-import { requestScheduleFromAi } from "@/lib/openrouter";
+import { requestScheduleFromAi } from "@/lib/ai-client";
 import { isFutureOrPresent, parseDate, isBefore } from "@/lib/datetime";
+
+const PROVIDER_STORAGE_KEY = "easycalendar:provider";
+const DEFAULT_PROVIDER: AiProviderPreference = normalizeProviderPreference(
+  process.env.NEXT_PUBLIC_DEFAULT_AI_PROVIDER,
+);
+
+const PROVIDER_OPTIONS: ProviderOption[] = [
+  {
+    value: "auto",
+    label: "자동",
+    helper: "Groq 우선 사용, 실패 시 OpenRouter",
+  },
+  {
+    value: "groq",
+    label: "Groq",
+    helper: "Llama 4 Maverick (이미지+텍스트) 선호",
+  },
+  {
+    value: "openrouter",
+    label: "OpenRouter",
+    helper: "다양한 제3자 모델을 직접 선택",
+  },
+];
+
+interface ProviderOption {
+  value: AiProviderPreference;
+  label: string;
+  helper: string;
+}
+
+function normalizeProviderPreference(
+  value?: string | null,
+  fallback: AiProviderPreference = "auto",
+): AiProviderPreference {
+  if (!value) return fallback;
+  const normalized = value.toLowerCase();
+  if (normalized === "auto" || normalized === "groq" || normalized === "openrouter") {
+    return normalized as AiProviderPreference;
+  }
+  return fallback;
+}
 
 export default function Home() {
   const [state, dispatch] = useReducer(plannerReducer, undefined, createInitialState);
@@ -74,6 +124,10 @@ export default function Home() {
     null,
   );
   const [toast, setToast] = useState<ToastMessage | null>(null);
+  const [providerPreference, setProviderPreference] = useState<AiProviderPreference>(
+    DEFAULT_PROVIDER,
+  );
+  const [providerAvailability, setProviderAvailability] = useState<{ groq: boolean; openrouter: boolean } | null>(null);
 
   const showToast = useCallback(
     (text: string, tone: ToastMessage["tone"] = "info") => {
@@ -82,12 +136,45 @@ export default function Home() {
     [],
   );
 
+  const handleProviderChange = useCallback(
+    (next: AiProviderPreference) => {
+      setProviderPreference(next);
+      if (typeof window !== "undefined") {
+        window.localStorage.setItem(PROVIDER_STORAGE_KEY, next);
+      }
+      const selected = PROVIDER_OPTIONS.find((option) => option.value === next);
+      if (selected) {
+        showToast(`${selected.label} 모드로 전환했습니다.`, "info");
+      }
+    },
+    [showToast],
+  );
+
   // 초기 로드 시 세션에서 일정 데이터 복원 (hydration 이후)
   useEffect(() => {
     const savedSchedule = loadScheduleFromSession();
     if (savedSchedule.length > 0) {
       dispatch({ type: "SET_SCHEDULE", payload: savedSchedule });
     }
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const stored = window.localStorage.getItem(PROVIDER_STORAGE_KEY);
+    if (stored) {
+      setProviderPreference(normalizeProviderPreference(stored, DEFAULT_PROVIDER));
+    }
+  }, []);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    fetch("/api/providers", { signal: controller.signal })
+      .then((res) => res.json())
+      .then((data) => {
+        setProviderAvailability({ groq: !!data.groq, openrouter: !!data.openrouter });
+      })
+      .catch(() => {})
+    return () => controller.abort();
   }, []);
 
   // 일정 변경 시 세션 저장
@@ -228,7 +315,11 @@ export default function Home() {
     setAbortController(controller);
 
     try {
-      const aiPlan = await requestScheduleFromAi([draft], controller.signal);
+      const aiPlan = await requestScheduleFromAi(
+        [draft],
+        providerPreference,
+        controller.signal,
+      );
 
       // 취소된 경우 추가 처리하지 않음
       if (controller.signal.aborted) {
@@ -283,7 +374,7 @@ export default function Home() {
         setAbortController(null);
       }
     }
-  }, [attachments, composerValue, showToast]);
+  }, [attachments, composerValue, providerPreference, showToast]);
 
   const handleAddItem = useCallback(() => {
     const now = new Date();
@@ -447,10 +538,18 @@ export default function Home() {
               자연어로 일정을 만들고 다듬어 보세요.
             </h1>
           </header>
+          <div className="flex w-full justify-end">
+            <ProviderSelector
+              value={providerPreference}
+              onChange={handleProviderChange}
+              disabled={state.isLoading}
+              availability={providerAvailability ?? undefined}
+            />
+          </div>
 
           <Card className="flex flex-1 flex-col">
             <CardHeader className="flex flex-col gap-3">
-              <div className="flex items-center justify-between gap-2">
+              <div className="flex flex-wrap items-center justify-between gap-2">
                 <h2 className="text-lg font-semibold">대화</h2>
               </div>
             </CardHeader>
@@ -1211,6 +1310,56 @@ function EmptyState() {
     <div className="rounded-3xl border border-dashed border-border px-4 py-3 text-center text-sm text-muted-foreground">
       AI가 전송한 일정이 이곳에 표시됩니다. <br />
       또는 직접 일정을 추가하거나 수정해 보세요.
+    </div>
+  );
+}
+
+function ProviderSelector({
+  value,
+  onChange,
+  disabled,
+  availability,
+}: {
+  value: AiProviderPreference;
+  onChange: (value: AiProviderPreference) => void;
+  disabled?: boolean;
+  availability?: { groq: boolean; openrouter: boolean };
+}) {
+
+  return (
+    <div className="flex flex-col items-end gap-1 text-right">
+      <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+        모델 제공자
+      </span>
+      <Select
+        value={value}
+        onValueChange={(next: string) => onChange(next as AiProviderPreference)}
+        disabled={disabled}
+      >
+        <SelectTrigger className="w-[200px] justify-between rounded-2xl">
+          <SelectValue placeholder="모델 제공자를 선택하세요" />
+        </SelectTrigger>
+        <SelectContent align="end" className="min-w-[260px]">
+          {PROVIDER_OPTIONS.map((option) => (
+            <SelectItem
+              key={option.value}
+              value={option.value}
+              disabled={
+                option.value === "groq"
+                  ? availability ? !availability.groq : false
+                  : option.value === "openrouter"
+                    ? availability ? !availability.openrouter : false
+                    : false
+              }
+            >
+              <SelectItemText className="text-sm font-semibold text-foreground">{option.label}</SelectItemText>
+              <span className="text-xs font-normal text-muted-foreground">
+                {option.helper}
+              </span>
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
     </div>
   );
 }

@@ -1,5 +1,8 @@
 export type AuthorRole = "user" | "assistant" | "system";
 
+export type AiProvider = "openrouter" | "groq";
+export type AiProviderPreference = AiProvider | "auto";
+
 export interface ConversationAttachment {
   id: string;
   name: string;

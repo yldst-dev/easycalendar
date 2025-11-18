@@ -2,6 +2,14 @@
 
 Stay aligned on the Next.js calendar app; revise these notes as workflows evolve.
 
+## Phase Tracker (2025-11-18)
+- [x] Phase 1 – Groq provider integration & API validation
+- [x] Phase 2 – Documentation, env templates, and privacy updates
+- [x] Phase 3 – Conversation UI provider selector & runtime override plumbing
+- [x] Phase 4 – Docs/env/privacy refresh for selector toggle
+- [x] Phase 5 – Build shadcn Select component for provider control
+- [x] Phase 6 – README copy tweaks & regression checks
+
 ## Workflow Rules
 - phase대로 짜고 계획하기 — define named phases and capture objectives before coding.
 - phase가 끝나면 첨부된 md 파일의 체크박스에 체크하기 — tick the phase-tracker markdown checklist when each phase ends.

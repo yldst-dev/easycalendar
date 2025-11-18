@@ -1,21 +1,29 @@
 import { NextResponse } from "next/server";
 import { SYSTEM_PROMPT } from "@/lib/prompts";
 import { withAttachmentContext } from "@/lib/message-utils";
-import { logOpenRouterEvent } from "@/lib/server/logger";
-import type { ConversationMessage } from "@/lib/types";
+import { logAiEvent } from "@/lib/server/logger";
+import type { AiProvider, AiProviderPreference, ConversationMessage } from "@/lib/types";
 
-const OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions";
+type PlanRequestBody = {
+  messages?: ConversationMessage[];
+  provider?: AiProviderPreference | string;
+};
+
+function normalizePreference(
+  value?: string | null,
+  fallback: AiProviderPreference = "openrouter",
+): AiProviderPreference {
+  if (!value) return fallback;
+  const normalized = value.toLowerCase();
+  if (normalized === "auto" || normalized === "groq" || normalized === "openrouter") {
+    return normalized as AiProviderPreference;
+  }
+  return fallback;
+}
 
 export async function POST(request: Request) {
-  const apiKey = process.env.OPENROUTER_API_KEY?.trim();
-  if (!apiKey) {
-    return NextResponse.json(
-      { error: "OpenRouter API key is not configured." },
-      { status: 503 },
-    );
-  }
 
-  let body: { messages?: ConversationMessage[] };
+  let body: PlanRequestBody;
   try {
     body = await request.json();
   } catch {
@@ -36,13 +44,78 @@ export async function POST(request: Request) {
   const hasImages = body.messages.some(
     (msg) => msg.attachments && msg.attachments.some((att) => att.type?.startsWith("image/")),
   );
-  const textModelOverride = process.env.OPENROUTER_MODEL?.trim();
-  const visionModelOverride = process.env.OPENROUTER_VISION_MODEL?.trim();
-  const defaultTextModel = "x-ai/grok-4-fast:free";
-  const defaultVisionModel = "openai/gpt-4o-mini";
+
+  const envPreference = normalizePreference(process.env.PLANNER_AI_PROVIDER, "openrouter");
+  const providerPreference = normalizePreference(
+    typeof body.provider === "string" ? body.provider : undefined,
+    envPreference,
+  );
+  const isAutoPreference = providerPreference === "auto";
+  const openrouterApiKey = process.env.OPENROUTER_API_KEY?.trim();
+  const groqApiKey = process.env.GROQ_API_KEY?.trim();
+
+  let provider: AiProvider = "openrouter";
+  let apiKey: string | undefined;
+
+  if (providerPreference === "groq") {
+    provider = "groq";
+    apiKey = groqApiKey;
+  } else if (isAutoPreference) {
+    if (groqApiKey) {
+      provider = "groq";
+      apiKey = groqApiKey;
+    } else {
+      provider = "openrouter";
+      apiKey = openrouterApiKey;
+    }
+  } else {
+    provider = "openrouter";
+    apiKey = openrouterApiKey;
+  }
+
+  if (!apiKey) {
+    const missingSource = isAutoPreference
+      ? "Groq 또는 OpenRouter"
+      : provider === "groq"
+        ? "Groq"
+        : "OpenRouter";
+    return NextResponse.json(
+      { error: `${missingSource} API key is not configured.` },
+      { status: 503 },
+    );
+  }
+  const resolvedApiKey = apiKey;
+
+  const groqTextOverride = process.env.GROQ_MODEL?.trim();
+  const groqVisionOverride = process.env.GROQ_VISION_MODEL?.trim();
+  const openrouterTextOverride = process.env.OPENROUTER_MODEL?.trim();
+  const openrouterVisionOverride = process.env.OPENROUTER_VISION_MODEL?.trim();
+
+  const providerLabel = provider === "groq" ? "Groq" : "OpenRouter";
+  const origin = request.headers.get("origin") ?? "https://easycalendar.local";
+
+  const groqTextModel = groqTextOverride ?? "meta-llama/llama-3.3-70b-versatile";
+  const groqVisionModel = groqVisionOverride ?? groqTextOverride ?? "meta-llama/llama-4-maverick-17b-128e-instruct";
+  const openrouterTextModel = openrouterTextOverride ?? "x-ai/grok-4-fast:free";
+  const openrouterVisionModel = openrouterVisionOverride ?? openrouterTextOverride ?? "openai/gpt-4o-mini";
+
+  const endpoint = provider === "groq"
+    ? "https://api.groq.com/openai/v1/chat/completions"
+    : "https://openrouter.ai/api/v1/chat/completions";
+  const headers: Record<string, string> = provider === "groq"
+    ? {
+        Authorization: `Bearer ${resolvedApiKey}`,
+        "Content-Type": "application/json",
+      }
+    : {
+        Authorization: `Bearer ${resolvedApiKey}`,
+        "Content-Type": "application/json",
+        "HTTP-Referer": origin,
+        "X-Title": "EasyCalendar",
+      };
   const model = hasImages
-    ? visionModelOverride || textModelOverride || defaultVisionModel
-    : textModelOverride || defaultTextModel;
+    ? (provider === "groq" ? groqVisionModel : openrouterVisionModel)
+    : (provider === "groq" ? groqTextModel : openrouterTextModel);
 
   // Add current date and time context to system prompt
   const now = new Date();
@@ -109,52 +182,51 @@ export async function POST(request: Request) {
     ],
   };
 
-  const origin = request.headers.get("origin") ?? "https://easycalendar.local";
-
   let response: Response;
   try {
-    response = await fetch(OPENROUTER_URL, {
+    response = await fetch(endpoint, {
       method: "POST",
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        "Content-Type": "application/json",
-        "HTTP-Referer": origin,
-        "X-Title": "EasyCalendar",
-      },
+      headers,
       body: JSON.stringify(payload),
       next: { revalidate: 0 },
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    logOpenRouterEvent({
+    logAiEvent({
+      source: provider,
       status: "error",
-      message: "OpenRouter 요청을 전송하지 못했습니다.",
+      message: `${providerLabel} 요청을 전송하지 못했습니다.`,
       model,
       details: message,
     });
-    return NextResponse.json({ error: "Failed to reach OpenRouter." }, { status: 502 });
+    return NextResponse.json({ error: `Failed to reach ${providerLabel}.` }, { status: 502 });
   }
 
-  const requestId = response.headers.get("x-request-id") ?? undefined;
+  const requestId =
+    response.headers.get("x-request-id") ??
+    response.headers.get("x-groq-request-id") ??
+    undefined;
 
   if (!response.ok) {
     const errorText = await response.text();
-    logOpenRouterEvent({
+    logAiEvent({
+      source: provider,
       status: "error",
-      message: `OpenRouter 응답 오류 (${response.status})`,
+      message: `${providerLabel} 응답 오류 (${response.status})`,
       model,
       details: errorText,
       requestId,
     });
     return NextResponse.json(
-      { error: `OpenRouter error: ${response.status}`, detail: errorText },
+      { error: `${providerLabel} error: ${response.status}`, detail: errorText },
       { status: response.status },
     );
   }
 
-  logOpenRouterEvent({
+  logAiEvent({
+    source: provider,
     status: "success",
-    message: "OpenRouter 요청이 성공했습니다.",
+    message: `${providerLabel} 요청이 성공했습니다.`,
     model,
     requestId,
   });

@@ -3,7 +3,7 @@ import "./globals.css";
 
 export const metadata: Metadata = {
   title: "EasyCalendar",
-  description: "Chat-based schedule assistant powered by OpenRouter",
+  description: "Chat-based schedule assistant powered by Groq & OpenRouter",
   icons: {
     icon: "/favicon.png",
     shortcut: "/favicon.png",
@@ -11,7 +11,7 @@ export const metadata: Metadata = {
   },
   openGraph: {
     title: "일정을 쉽고 빠르게 채팅하듯이, EASYCALENDAR",
-    description: "Chat-based schedule assistant powered by OpenRouter",
+    description: "Chat-based schedule assistant powered by Groq & OpenRouter",
     siteName: "EasyCalendar",
     type: "website",
     locale: "ko_KR",
@@ -19,7 +19,7 @@ export const metadata: Metadata = {
   twitter: {
     card: "summary_large_image",
     title: "일정을 쉽고 빠르게 채팅하듯이, EASYCALENDAR",
-    description: "Chat-based schedule assistant powered by OpenRouter",
+    description: "Chat-based schedule assistant powered by Groq & OpenRouter",
   },
 };
 
