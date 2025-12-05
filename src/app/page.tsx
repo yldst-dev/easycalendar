@@ -73,7 +73,15 @@ import {
 } from "@/lib/state";
 import { exportSingleItemAsIcs, addToGoogleCalendar } from "@/lib/exporters";
 import { requestScheduleFromAi } from "@/lib/ai-client";
-import { isFutureOrPresent, parseDate, isBefore } from "@/lib/datetime";
+import {
+  bumpDateOnlyToNextYearIfPast,
+  isFutureOrPresent,
+  parseDate,
+  isBefore,
+  isSameOrAfterDay,
+} from "@/lib/datetime";
+
+const DISPLAY_TIMEZONE = "Asia/Seoul";
 
 const PROVIDER_STORAGE_KEY = "easycalendar:provider";
 const DEFAULT_PROVIDER: AiProviderPreference = normalizeProviderPreference(
@@ -334,9 +342,25 @@ export default function Home() {
       };
 
       const now = new Date(Date.now() - 60 * 1000);
-      const filteredItems = (aiPlan.items ?? []).filter(
-        (item) => item.start && isFutureOrPresent(item.start, now),
-      );
+      const filteredItems = (aiPlan.items ?? [])
+        .map((item) => {
+          if (!item.start) return item;
+          const bumped = bumpDateOnlyToNextYearIfPast(item.start, now);
+          if (!bumped || bumped === item.start) return item;
+          return { ...item, start: bumped } satisfies ScheduleItem;
+        })
+        .filter((item) => {
+          const keep =
+            item.start &&
+            (isFutureOrPresent(item.start, now) || isSameOrAfterDay(item.start, now));
+          if (!keep && process.env.NODE_ENV === "development") {
+            console.warn("[easycalendar][ai] dropped past item", {
+              start: item.start,
+              reference: now.toISOString(),
+            });
+          }
+          return Boolean(keep);
+        });
       const droppedCount = (aiPlan.items?.length ?? 0) - filteredItems.length;
 
       dispatch({ type: "ADD_MESSAGE", payload: assistantMessage });
@@ -643,7 +667,7 @@ export default function Home() {
                       일정이 생성되면 여기에서 날짜별로 확인할 수 있어요.
                     </div>
                   ) : (
-                    Object.entries(scheduleByDate).map(([date, items]) => (
+                    scheduleByDate.map(([date, items]) => (
                       <div key={date} className="flex flex-col gap-2">
                         <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                           <TypewriterText text={formatDateLabel(date)} as="span" className="text-xs" />
@@ -1365,12 +1389,25 @@ function ProviderSelector({
 }
 
 function groupScheduleByDate(items: ScheduleItem[]) {
-  return items.reduce<Record<string, ScheduleItem[]>>((acc, item) => {
+  const grouped = new Map<string, ScheduleItem[]>();
+
+  for (const item of items) {
     const key = item.start ? item.start.slice(0, 10) : "기타";
-    if (!acc[key]) acc[key] = [];
-    acc[key].push(item);
-    return acc;
-  }, {});
+    const list = grouped.get(key) ?? [];
+    list.push(item);
+    grouped.set(key, list);
+  }
+
+  for (const [key, list] of grouped) {
+    list.sort((a, b) => {
+      const aStart = a.start ? Date.parse(a.start) : 0;
+      const bStart = b.start ? Date.parse(b.start) : 0;
+      return aStart - bStart;
+    });
+    grouped.set(key, list);
+  }
+
+  return Array.from(grouped.entries()).sort(([a], [b]) => Date.parse(a) - Date.parse(b));
 }
 
 function formatDateLabel(date: string) {
@@ -1378,6 +1415,7 @@ function formatDateLabel(date: string) {
     month: "short",
     day: "numeric",
     weekday: "short",
+    timeZone: DISPLAY_TIMEZONE,
   });
 }
 
@@ -1393,11 +1431,13 @@ function formatTimeRange(start: string, end?: string, allDay?: boolean) {
   const startLabel = startDate.toLocaleTimeString(undefined, {
     hour: "2-digit",
     minute: "2-digit",
+    timeZone: DISPLAY_TIMEZONE,
   });
   const endLabel = endDate
     ? endDate.toLocaleTimeString(undefined, {
         hour: "2-digit",
         minute: "2-digit",
+        timeZone: DISPLAY_TIMEZONE,
       })
     : "";
   return endLabel ? `${startLabel} - ${endLabel}` : startLabel;

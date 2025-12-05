@@ -140,6 +140,7 @@ export async function POST(request: Request) {
 ### Current Context
 - 현재 날짜 및 시간: ${currentDateKST}
 - ISO 8601 형식: ${currentDateISO}
+- 월/일만 주어지면 올해(${currentDateKST.slice(0, 4)}년)로 우선 해석하고, 이미 지난 날짜라면 다음 해로 이월하세요.
 - 사용자가 "오늘", "내일", "이번 주" 등의 상대적 날짜를 언급할 때 위의 현재 시간을 기준으로 계산하세요.`;
 
   // Process messages to handle image attachments

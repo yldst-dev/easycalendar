@@ -6,7 +6,11 @@ import {
   PlannerState,
   ScheduleItem,
 } from "@/lib/types";
-import { isFutureOrPresent } from "@/lib/datetime";
+import {
+  bumpDateOnlyToNextYearIfPast,
+  isFutureOrPresent,
+  isSameOrAfterDay,
+} from "@/lib/datetime";
 
 const SCHEDULE_STORAGE_KEY = "easycalendar_schedule";
 
@@ -167,8 +171,24 @@ export const createDraftMessage = (
 function sanitizeSchedule(items: ScheduleItem[]): ScheduleItem[] {
   const toleranceMs = 60 * 1000;
   const reference = new Date(Date.now() - toleranceMs);
-  return items.filter((item) => {
-    if (!item || !item.start) return false;
-    return isFutureOrPresent(item.start, reference);
-  });
+  return items
+    .map((item) => {
+      if (!item?.start) return item;
+      const bumped = bumpDateOnlyToNextYearIfPast(item.start, reference);
+      if (!bumped || bumped === item.start) return item;
+      return { ...item, start: bumped } satisfies ScheduleItem;
+    })
+    .filter((item) => {
+      if (!item || !item.start) return false;
+      const ok =
+        isFutureOrPresent(item.start, reference) ||
+        isSameOrAfterDay(item.start, reference);
+      if (!ok && process.env.NODE_ENV === "development") {
+        console.warn("[easycalendar][filter] dropped past item", {
+          start: item.start,
+          reference: reference.toISOString(),
+        });
+      }
+      return ok;
+    });
 }
