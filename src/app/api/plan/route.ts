@@ -119,24 +119,26 @@ export async function POST(request: Request) {
 
   // Add current date and time context to system prompt
   const now = new Date();
-  const currentDateTime = now.toLocaleString('ko-KR', {
-    timeZone: 'Asia/Seoul',
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-    second: '2-digit'
-  });
+  const currentDateKST = `${new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Seoul",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(now)}/${new Intl.DateTimeFormat("en-GB", {
+    timeZone: "Asia/Seoul",
+    hour12: false,
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(now)} (KST)`;
   const currentDateISO = now.toISOString();
 
   const enhancedSystemPrompt = `${SYSTEM_PROMPT}
 
 ### Future Scheduling Guardrail
-- EasyCalendar는 현재 시각(${currentDateTime}) 이전 일정은 허용하지 않습니다. 과거 일정은 안내만 하고 items는 비워 두세요.
+- EasyCalendar는 현재 시각(${currentDateKST}) 이전 일정은 허용하지 않습니다. 과거 일정은 안내만 하고 items는 비워 두세요.
 
 ### Current Context
-- 현재 날짜 및 시간: ${currentDateTime} (한국 시간)
+- 현재 날짜 및 시간: ${currentDateKST}
 - ISO 8601 형식: ${currentDateISO}
 - 사용자가 "오늘", "내일", "이번 주" 등의 상대적 날짜를 언급할 때 위의 현재 시간을 기준으로 계산하세요.`;
 
