@@ -14,6 +14,10 @@ Stay aligned on the Next.js calendar app; revise these notes as workflows evolve
 - [x] Phase 1 – Verify advisory targets & align React/Next versions
 - [x] Phase 2 – Validate checks (tsc/lint/build) and push
 
+## Phase Tracker (2025-12-20 – Next 16.0.10 pin)
+- [x] Phase 1 – Pin Next.js 16.0.10 (security advisory line) and align tooling
+- [x] Phase 2 – Validate checks (tsc/lint/build) and push
+
 ## Workflow Rules
 - phase대로 짜고 계획하기 — define named phases and capture objectives before coding.
 - phase가 끝나면 첨부된 md 파일의 체크박스에 체크하기 — tick the phase-tracker markdown checklist when each phase ends.
