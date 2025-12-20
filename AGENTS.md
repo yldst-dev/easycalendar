@@ -10,6 +10,10 @@ Stay aligned on the Next.js calendar app; revise these notes as workflows evolve
 - [x] Phase 5 – Build shadcn Select component for provider control
 - [x] Phase 6 – README copy tweaks & regression checks
 
+## Phase Tracker (2025-12-20)
+- [x] Phase 1 – Verify advisory targets & align React/Next versions
+- [x] Phase 2 – Validate checks (tsc/lint/build) and push
+
 ## Workflow Rules
 - phase대로 짜고 계획하기 — define named phases and capture objectives before coding.
 - phase가 끝나면 첨부된 md 파일의 체크박스에 체크하기 — tick the phase-tracker markdown checklist when each phase ends.
