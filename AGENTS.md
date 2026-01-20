@@ -4,7 +4,7 @@ Repository guidelines for agentic coding work. Keep this file current as tooling
 conventions evolve.
 
 ## Project Snapshot
-- Framework: Next.js App Router (see `package.json`; currently `next` 16.0.10).
+- Framework: Next.js App Router (see `package.json`; currently `next` 16.1.4).
 - Language: TypeScript (strict mode).
 - UI: React 19, Tailwind CSS 4, shadcn/ui components, lucide-react icons.
 - State: `useReducer` with centralized state in `src/lib/state.ts`.

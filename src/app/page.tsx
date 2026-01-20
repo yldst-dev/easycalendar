@@ -1013,7 +1013,7 @@ function Composer({
           placeholder={placeholderText}
           aria-label="ChatGPT에게 메시지 보내기..."
           disabled={disabled}
-          className="w-full resize-none bg-transparent border-none outline-none text-foreground placeholder:text-muted-foreground px-4 py-3 text-[15px] sm:text-base leading-relaxed min-h-[48px] sm:min-h-[52px]"
+          className="w-full resize-none bg-transparent border-none outline-none text-foreground placeholder:text-muted-foreground px-4 py-3 text-base sm:text-base leading-relaxed min-h-[48px] sm:min-h-[52px]"
           onPaste={onPaste}
           rows={1}
         />
