@@ -88,19 +88,9 @@ export const plannerReducer = (
       };
     }
     case "ADD_SCHEDULE_ITEMS": {
-      const newItems = sanitizeSchedule(action.payload as ScheduleItem[]);
-      // Filter out duplicate items based on title, start time, and location
-      const filteredNewItems = newItems.filter((newItem) =>
-        !state.schedule.some(
-          (existingItem) =>
-            existingItem.title === newItem.title &&
-            existingItem.start === newItem.start &&
-            existingItem.location === newItem.location,
-        ),
-      );
       return {
         ...state,
-        schedule: [...state.schedule, ...filteredNewItems],
+        schedule: [...state.schedule, ...sanitizeSchedule(action.payload as ScheduleItem[])],
       };
     }
     case "UPDATE_SCHEDULE_ITEM": {
@@ -175,8 +165,12 @@ function sanitizeSchedule(items: ScheduleItem[]): ScheduleItem[] {
     .map((item) => {
       if (!item?.start) return item;
       const bumped = bumpDateOnlyToNextYearIfPast(item.start, reference);
-      if (!bumped || bumped === item.start) return item;
-      return { ...item, start: bumped } satisfies ScheduleItem;
+      const nextStart = bumped || item.start;
+      return {
+        ...item,
+        start: nextStart,
+        reminderMinutes: item.reminderMinutes ?? 10,
+      } satisfies ScheduleItem;
     })
     .filter((item) => {
       if (!item || !item.start) return false;

@@ -29,6 +29,7 @@ export interface ScheduleItem {
   start: string; // ISO string
   end?: string; // ISO string
   allDay?: boolean;
+  reminderMinutes?: number;
 }
 
 export interface PlannerState {

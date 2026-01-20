@@ -37,7 +37,7 @@ export default function RootLayout({
           <main className="flex-1">{children}</main>
           <footer className="border-t border-border bg-background/95">
             <div className="mx-auto flex w-full max-w-6xl items-center justify-between px-4 py-3 text-xs text-muted-foreground">
-              <span>© 2025 EASYCALENDAR</span>
+              <span>© 2026 EASYCALENDAR</span>
               <nav className="flex items-center gap-4">
                 <a
                   href="https://github.com/yldst-dev/easycalendar"

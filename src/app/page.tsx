@@ -49,6 +49,7 @@ import { Label } from "@/components/ui/label";
 import { DateTimePicker } from "@/components/ui/date-picker";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Tooltip, TooltipContent } from "@/components/ui/tooltip";
+import { Textarea } from "@/components/ui/textarea";
 import {
   Select,
   SelectContent,
@@ -136,6 +137,7 @@ export default function Home() {
     DEFAULT_PROVIDER,
   );
   const [providerAvailability, setProviderAvailability] = useState<{ groq: boolean; openrouter: boolean } | null>(null);
+  const [mobileTab, setMobileTab] = useState<"preview" | "calendar">("preview");
 
   const showToast = useCallback(
     (text: string, tone: ToastMessage["tone"] = "info") => {
@@ -414,7 +416,7 @@ export default function Home() {
   }, [showToast]);
 
   const handleItemChange = useCallback(
-    (id: string, field: keyof ScheduleItem, value: string | boolean) => {
+    (id: string, field: keyof ScheduleItem, value: string | boolean | number) => {
       const current = state.schedule.find((item) => item.id === id);
       if (!current) return;
 
@@ -462,6 +464,12 @@ export default function Home() {
         updates.description = value as string;
       } else if (field === "location") {
         updates.location = value as string;
+      } else if (field === "reminderMinutes") {
+        const minutes = typeof value === "number" ? value : Number(value);
+        if (!Number.isFinite(minutes)) {
+          return;
+        }
+        updates.reminderMinutes = Math.max(0, Math.round(minutes));
       }
 
       if (Object.keys(updates).length === 0) {
@@ -551,14 +559,14 @@ export default function Home() {
   }, []);
 
   return (
-    <main className="min-h-screen bg-background px-4 py-6 sm:py-10 lg:py-12 flex items-center justify-center">
-      <div className="mx-auto flex w-full max-w-6xl flex-col gap-6 sm:gap-8 lg:grid lg:grid-cols-[minmax(0,_3fr)_minmax(0,_2fr)] lg:items-start lg:gap-8 xl:gap-10">
-        <section className="flex flex-col gap-4 lg:gap-6">
+    <main className="min-h-screen bg-background sm:px-4 sm:py-10 lg:py-12 flex flex-col items-center justify-start sm:justify-center">
+      <div className="mx-auto flex w-full max-w-6xl flex-col gap-6 sm:gap-8 lg:grid lg:grid-cols-[minmax(0,_3fr)_minmax(0,_2fr)] lg:items-start lg:gap-8 xl:gap-10 pb-32 sm:pb-0">
+        <section className="flex flex-col gap-4 lg:gap-6 px-4 sm:px-0 pt-6 sm:pt-0">
           <header className="flex flex-col gap-1">
             <p className="text-sm font-medium uppercase tracking-wide text-muted-foreground">
               EasyCalendar
             </p>
-            <h1 className="text-3xl font-semibold text-foreground sm:text-4xl">
+            <h1 className="text-2xl sm:text-3xl font-semibold text-foreground sm:text-4xl tracking-tight">
               자연어로 일정을 만들고 다듬어 보세요.
             </h1>
           </header>
@@ -571,14 +579,14 @@ export default function Home() {
             />
           </div>
 
-          <Card className="flex flex-1 flex-col">
-            <CardHeader className="flex flex-col gap-3">
+          <Card className="flex flex-1 flex-col border bg-card">
+            <CardHeader className="flex flex-col gap-3 px-4 sm:px-6">
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <h2 className="text-lg font-semibold">대화</h2>
               </div>
             </CardHeader>
-            <CardContent className="flex flex-1 flex-col gap-4">
-              <div className="flex flex-1 flex-col gap-3 overflow-y-auto pr-1">
+            <CardContent className="flex flex-1 flex-col gap-4 px-4 sm:px-6">
+              <div className="flex flex-1 flex-col gap-3 overflow-visible sm:overflow-y-auto pr-1">
                 {state.messages.map((message) => (
                   <MessageBubble key={message.id} message={message} />
                 ))}
@@ -586,7 +594,7 @@ export default function Home() {
               </div>
 
               <div className="flex justify-center">
-                <div className="w-full max-w-[98%]">
+                <div className="w-full">
                   <Composer
                     value={composerValue}
                     onValueChange={setComposerValue}
@@ -606,9 +614,41 @@ export default function Home() {
           </Card>
         </section>
 
-        <section className="flex flex-col gap-4 lg:gap-6">
+        <section className="flex flex-col gap-4 lg:gap-6 px-4 sm:px-0">
           <div className="flex flex-col gap-4">
-            <Card className="flex h-full flex-col transition-all duration-300 ease-in-out">
+            <div className="grid grid-cols-2 gap-1 rounded-xl border border-border/60 bg-muted/30 p-1 text-xs font-medium sm:hidden">
+              <button
+                type="button"
+                onClick={() => setMobileTab("preview")}
+                className={cn(
+                  "flex h-11 items-center justify-center rounded-lg px-3 text-sm font-medium transition-all duration-200",
+                  mobileTab === "preview"
+                    ? "bg-foreground text-background shadow-none"
+                    : "text-muted-foreground hover:text-foreground hover:bg-muted/50"
+                )}
+              >
+                일정 미리보기
+              </button>
+              <button
+                type="button"
+                onClick={() => setMobileTab("calendar")}
+                className={cn(
+                  "flex h-11 items-center justify-center rounded-lg px-3 text-sm font-medium transition-all duration-200",
+                  mobileTab === "calendar"
+                    ? "bg-foreground text-background shadow-none"
+                    : "text-muted-foreground hover:text-foreground hover:bg-muted/50"
+                )}
+              >
+                캘린더 뷰
+              </button>
+            </div>
+
+            <Card
+              className={cn(
+                "h-full flex-col transition-all duration-300 ease-in-out",
+                mobileTab === "preview" ? "flex" : "hidden sm:flex"
+              )}
+            >
               <CardHeader>
                 <h2 className="text-lg font-semibold">AI 일정 미리보기</h2>
               </CardHeader>
@@ -651,7 +691,12 @@ export default function Home() {
               </CardContent>
             </Card>
 
-            <Card className="flex h-full flex-col transition-all duration-300 ease-in-out">
+            <Card
+              className={cn(
+                "h-full flex-col transition-all duration-300 ease-in-out",
+                mobileTab === "calendar" ? "flex" : "hidden sm:flex"
+              )}
+            >
               <CardHeader>
                 <h2 className="text-lg font-semibold">캘린더 뷰</h2>
               </CardHeader>
@@ -913,14 +958,14 @@ function Composer({
 
   return (
     <div 
-      className="flex flex-col items-center mx-auto px-4 sm:px-5 md:px-6"
-      style={{ 
-        padding: '16px',
-        maxWidth: '100%'
-      }}
+      className={cn(
+        "flex flex-col items-center mx-auto transition-all duration-300",
+        "fixed bottom-0 left-0 right-0 z-50 bg-background/85 backdrop-blur-xl border-t border-border px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]",
+        "sm:relative sm:bottom-auto sm:left-auto sm:right-auto sm:z-0 sm:bg-transparent sm:backdrop-blur-none sm:border-none sm:p-0 sm:pb-0 sm:px-5 md:px-6"
+      )}
     >
       {attachments.length ? (
-        <div className="flex flex-wrap gap-2 w-full mb-4">
+        <div className="flex flex-wrap gap-2 w-full mb-3 sm:mb-4 px-1">
           {attachments.map((attachment) => (
             <AttachmentPreview
               key={attachment.id}
@@ -933,17 +978,14 @@ function Composer({
       ) : null}
 
       <div 
-        className="flex flex-col w-full relative transition-all duration-300 ease-in-out max-w-3xl border rounded-3xl bg-background border-border hover:border-input"
-        style={{
-          boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03)'
-        }}
+        className="flex flex-col relative transition-all duration-300 ease-in-out w-full max-w-3xl border rounded-[24px] bg-background border-border hover:border-input"
         onDragEnter={handleDragEnter}
         onDragLeave={handleDragLeave}
         onDragOver={handleDragOver}
         onDrop={handleDrop}
       >
         {isDragOver && (
-          <div className="absolute inset-0 rounded-3xl border-2 border-dashed border-primary bg-background/95 backdrop-blur-sm flex items-center justify-center z-10">
+          <div className="absolute inset-0 rounded-[24px] border-2 border-dashed border-primary bg-background/95 backdrop-blur-sm flex items-center justify-center z-10">
             <div className="flex items-center gap-3">
               <ImageIcon className="h-8 w-8 text-primary flex-shrink-0" />
               <div className="flex flex-col">
@@ -971,21 +1013,20 @@ function Composer({
           placeholder={placeholderText}
           aria-label="ChatGPT에게 메시지 보내기..."
           disabled={disabled}
-          className="w-full resize-none bg-transparent border-none outline-none text-foreground placeholder:text-muted-foreground px-3 sm:px-4 py-2 sm:py-3 text-sm sm:text-base leading-relaxed min-h-[48px] sm:min-h-[52px]"
+          className="w-full resize-none bg-transparent border-none outline-none text-foreground placeholder:text-muted-foreground px-4 py-3 text-[15px] sm:text-base leading-relaxed min-h-[48px] sm:min-h-[52px]"
           onPaste={onPaste}
           rows={1}
         />
         
-        <div className="flex items-center justify-between px-3 pb-3">
+        <div className="flex items-center justify-between px-2 pb-2 sm:px-3 sm:pb-3">
           <label
             htmlFor="attachment"
             className={cn(
-              "inline-flex items-center gap-2 cursor-pointer transition-colors rounded-full px-3 py-1.5 text-sm font-medium border border-border",
-              "hover:bg-accent hover:text-accent-foreground hover:border-input"
+              "inline-flex items-center gap-2 cursor-pointer transition-colors rounded-full px-3 py-2 sm:py-1.5 text-sm font-medium text-muted-foreground hover:bg-muted hover:text-foreground",
             )}
           >
             <svg 
-              className="h-4 w-4" 
+              className="h-5 w-5 sm:h-4 sm:w-4" 
               fill="none" 
               stroke="currentColor" 
               viewBox="0 0 24 24"
@@ -1009,18 +1050,18 @@ function Composer({
             />
           </label>
           
-          <button
+          <Button
             type="button"
             onClick={isLoading ? onCancel : onSubmit}
             disabled={!isLoading && (!value.trim() && !attachments.length)}
+            size="icon"
             className={cn(
-              "inline-flex items-center justify-center rounded-full transition-colors",
-              "h-8 w-8 text-primary-foreground",
+              "rounded-full transition-colors h-8 w-8 sm:h-9 sm:w-9",
               !isLoading && (!value.trim() && !attachments.length)
-                ? "bg-muted cursor-not-allowed"
+                ? "bg-muted cursor-not-allowed text-muted-foreground"
                 : isLoading
-                ? "bg-black hover:bg-gray-800"
-                : "bg-primary hover:bg-primary/90"
+                ? "bg-black hover:bg-gray-800 text-primary-foreground"
+                : "bg-primary hover:bg-primary/90 text-primary-foreground"
             )}
           >
             {isLoading ? (
@@ -1032,11 +1073,11 @@ function Composer({
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 10l7-7m0 0l7 7m-7-7v18" />
               </svg>
             )}
-          </button>
+          </Button>
         </div>
       </div>
       
-      <span className="text-center text-xs text-muted-foreground mt-2">
+      <span className="hidden sm:block text-center text-xs text-muted-foreground mt-2">
         이미지는 임시로만 사용되며 서버에 저장되지 않습니다.
       </span>
     </div>
@@ -1081,13 +1122,15 @@ function AttachmentPreview({
         </span>
       </div>
       {!readOnly && onRemove ? (
-        <button
+        <Button
           type="button"
-          className="ml-2 text-xs text-muted-foreground hover:text-foreground"
+          variant="ghost"
+          size="sm"
+          className="ml-2 h-auto p-0 text-xs text-muted-foreground hover:text-foreground"
           onClick={() => onRemove(attachment.id)}
         >
           제거
-        </button>
+        </Button>
       ) : null}
     </div>
   );
@@ -1099,7 +1142,7 @@ function ScheduleEditor({
   onRemove,
 }: {
   item: ScheduleItem;
-  onChange: (id: string, field: keyof ScheduleItem, value: string | boolean) => void;
+  onChange: (id: string, field: keyof ScheduleItem, value: string | boolean | number) => void;
   onRemove: (id: string) => void;
 }) {
   const [isExpanded, setIsExpanded] = useState(false);
@@ -1107,6 +1150,7 @@ function ScheduleEditor({
   const [draftLocation, setDraftLocation] = useState(item.location ?? "");
   const [draftDescription, setDraftDescription] = useState(item.description ?? "");
   const [draftAllDay, setDraftAllDay] = useState(Boolean(item.allDay));
+  const [draftReminder, setDraftReminder] = useState(item.reminderMinutes ?? 10);
   const descriptionRef = useRef<HTMLTextAreaElement | null>(null);
 
   useEffect(() => {
@@ -1124,6 +1168,10 @@ function ScheduleEditor({
   useEffect(() => {
     setDraftAllDay(Boolean(item.allDay));
   }, [item.allDay]);
+
+  useEffect(() => {
+    setDraftReminder(item.reminderMinutes ?? 10);
+  }, [item.reminderMinutes]);
 
   const updateAllDay = useCallback(
     (nextValue: boolean) => {
@@ -1143,8 +1191,8 @@ function ScheduleEditor({
   }, [draftDescription]);
 
   return (
-    <div className="flex flex-col rounded-3xl border border-border p-4 transition-all duration-300 ease-in-out hover:shadow-sm">
-      <div className="flex items-center justify-between gap-3 cursor-pointer" onClick={() => setIsExpanded(!isExpanded)}>
+    <div className="flex flex-col rounded-3xl border border-border transition-all duration-300 ease-in-out hover:border-ring/50">
+      <div className="flex items-center justify-between gap-3 cursor-pointer p-4" onClick={() => setIsExpanded(!isExpanded)}>
         <div className="flex-1">
           <h3 className="text-sm font-medium">
             <TypewriterText text={item.title || "제목 없음"} as="span" />
@@ -1172,7 +1220,7 @@ function ScheduleEditor({
             type="button"
             size="sm"
             variant="ghost"
-            className="h-8 px-3 text-xs hover:bg-muted/50"
+            className="h-9 px-3 text-xs hover:bg-muted/50"
             onClick={(e) => {
               e.stopPropagation();
               setIsExpanded(!isExpanded);
@@ -1184,7 +1232,7 @@ function ScheduleEditor({
             type="button"
             size="sm"
             variant="danger"
-            className="h-8 px-3 text-xs whitespace-nowrap transition-all duration-150 hover:-translate-y-[1px]"
+            className="h-9 px-3 text-xs whitespace-nowrap transition-all duration-150 hover:-translate-y-[1px]"
             onClick={(e) => {
               e.stopPropagation();
               onRemove(item.id);
@@ -1196,9 +1244,9 @@ function ScheduleEditor({
       </div>
 
       <div className={`overflow-hidden transition-all duration-300 ease-in-out ${
-        isExpanded ? 'max-h-[500px] opacity-100' : 'max-h-0 opacity-0'
+        isExpanded ? 'max-h-[1000px] opacity-100' : 'max-h-0 opacity-0'
       }`}>
-        <div className="mt-4 flex flex-col gap-3">
+        <div className="px-4 pb-4 flex flex-col gap-3">
           <Input
             value={draftTitle}
             onChange={(event) => setDraftTitle(event.target.value)}
@@ -1292,6 +1340,61 @@ function ScheduleEditor({
                   }
                 }}
               />
+            </div>
+            <div className="flex flex-col gap-1">
+              <Label htmlFor={`reminder-${item.id}`} className="text-xs text-muted-foreground">
+                알림
+              </Label>
+              <Select
+                value={String(draftReminder)}
+                onValueChange={(val) => {
+                  const num = parseInt(val, 10);
+                  setDraftReminder(num);
+                  onChange(item.id, "reminderMinutes", num);
+                }}
+              >
+                <SelectTrigger id={`reminder-${item.id}`} className="w-full">
+                  <SelectValue placeholder="알림 시간" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="5">
+                    <SelectItemText>5분 전</SelectItemText>
+                  </SelectItem>
+                  <SelectItem value="10">
+                    <SelectItemText>10분 전</SelectItemText>
+                  </SelectItem>
+                  <SelectItem value="15">
+                    <SelectItemText>15분 전</SelectItemText>
+                  </SelectItem>
+                  <SelectItem value="30">
+                    <SelectItemText>30분 전</SelectItemText>
+                  </SelectItem>
+                  <SelectItem value="60">
+                    <SelectItemText>1시간 전</SelectItemText>
+                  </SelectItem>
+                  <SelectItem value="120">
+                    <SelectItemText>2시간 전</SelectItemText>
+                  </SelectItem>
+                  <SelectItem value="180">
+                    <SelectItemText>3시간 전</SelectItemText>
+                  </SelectItem>
+                  <SelectItem value="1440">
+                    <SelectItemText>1일 전</SelectItemText>
+                  </SelectItem>
+                  <SelectItem value="2880">
+                    <SelectItemText>2일 전</SelectItemText>
+                  </SelectItem>
+                  <SelectItem value="4320">
+                    <SelectItemText>3일 전</SelectItemText>
+                  </SelectItem>
+                  <SelectItem value="7200">
+                    <SelectItemText>5일 전</SelectItemText>
+                  </SelectItem>
+                  <SelectItem value="10080">
+                    <SelectItemText>7일 전</SelectItemText>
+                  </SelectItem>
+                </SelectContent>
+              </Select>
             </div>
             <div className="flex flex-col gap-1">
               <Label htmlFor={`description-${item.id}`} className="text-xs text-muted-foreground">
@@ -1541,7 +1644,7 @@ function Toast({
   }, [undoAction, onClose]);
 
   return (
-    <div className="pointer-events-none fixed bottom-8 left-1/2 z-50 w-full max-w-sm -translate-x-1/2 px-4">
+    <div className="pointer-events-none fixed bottom-[calc(8.5rem+env(safe-area-inset-bottom))] sm:bottom-8 left-1/2 z-[100] w-full max-w-sm -translate-x-1/2 px-4">
       <div
         className={cn(
           "pointer-events-auto flex items-center gap-3 rounded-2xl border px-4 py-3 text-sm font-medium backdrop-blur",

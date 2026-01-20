@@ -36,6 +36,7 @@ export function exportScheduleAsIcs(items: ScheduleItem[]) {
     if (item.description) {
       lines.push(`DESCRIPTION:${escapeText(item.description)}`);
     }
+    appendValarm(lines, item);
     lines.push("END:VEVENT");
   });
 
@@ -76,6 +77,7 @@ export function exportSingleItemAsIcs(item: ScheduleItem) {
   if (item.description) {
     lines.push(`DESCRIPTION:${escapeText(item.description)}`);
   }
+  appendValarm(lines, item);
   lines.push("END:VEVENT");
   lines.push("END:VCALENDAR");
 
@@ -105,6 +107,17 @@ function formatDate(date: Date) {
 
 function escapeText(value: string) {
   return value.replace(/[\\,;]/g, (match) => `\\${match}`);
+}
+
+function appendValarm(lines: string[], item: ScheduleItem) {
+  const minutes = item.reminderMinutes ?? 10;
+  const normalized = Number.isFinite(minutes) ? Math.round(minutes) : 10;
+  if (normalized <= 0) return;
+  lines.push("BEGIN:VALARM");
+  lines.push("ACTION:DISPLAY");
+  lines.push(`TRIGGER:-PT${normalized}M`);
+  lines.push(`DESCRIPTION:${escapeText(item.title || "일정 알림")}`);
+  lines.push("END:VALARM");
 }
 
 export function addToGoogleCalendar(item: ScheduleItem) {
@@ -162,6 +175,7 @@ export function addToAppleCalendar(item: ScheduleItem) {
   if (item.description) {
     lines.push(`DESCRIPTION:${escapeText(item.description)}`);
   }
+  appendValarm(lines, item);
   lines.push("END:VEVENT");
   lines.push("END:VCALENDAR");
 
