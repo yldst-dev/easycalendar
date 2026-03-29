@@ -35,6 +35,37 @@ npm run dev
 
 브라우저에서 [http://localhost:3000](http://localhost:3000)에 접속해 기능을 확인할 수 있습니다. `.env.local`에서 Groq/OpenRouter 키 및 `PLANNER_AI_PROVIDER`를 설정하면 됩니다.
 
+### Dokploy 배포
+이 프로젝트는 단일 Next.js 웹 서비스이므로 Dokploy에서 `Dockerfile` 빌드 타입으로 바로 배포할 수 있습니다.
+
+1. Build Type을 `Dockerfile`로 설정합니다.
+2. `Dockerfile Path`는 `Dockerfile`, `Docker Context Path`는 `.`로 둡니다.
+3. Domain은 Dokploy UI에서 연결하고 내부 포트는 `3000`으로 설정합니다.
+4. Runtime Environment Variables에 아래 값을 넣습니다.
+
+| 변수 | 필수 여부 | 설명 |
+| --- | --- | --- |
+| `PLANNER_AI_PROVIDER` | 선택 | `auto`, `groq`, `openrouter` 중 하나 |
+| `GROQ_API_KEY` | 선택 | Groq 사용 시 필요 |
+| `GROQ_MODEL`, `GROQ_VISION_MODEL` | 선택 | Groq 모델 오버라이드 |
+| `OPENROUTER_API_KEY` | 선택 | OpenRouter 사용 시 필요 |
+| `OPENROUTER_MODEL`, `OPENROUTER_VISION_MODEL` | 선택 | OpenRouter 모델 오버라이드 |
+
+클라이언트 번들에 반영되는 `NEXT_PUBLIC_DEFAULT_AI_PROVIDER`, `NEXT_PUBLIC_PRIVACY_POLICY_URL` 값을 기본값이 아닌 다른 값으로 사용하려면 Dokploy의 `Build Time Arguments`에도 같은 이름으로 추가해야 합니다.
+
+```bash
+docker build \
+  --build-arg NEXT_PUBLIC_DEFAULT_AI_PROVIDER=auto \
+  --build-arg NEXT_PUBLIC_PRIVACY_POLICY_URL=https://example.com/privacy \
+  -t easycalendar:latest .
+
+docker run --rm -p 3000:3000 \
+  -e PLANNER_AI_PROVIDER=auto \
+  -e GROQ_API_KEY=your_groq_key \
+  -e OPENROUTER_API_KEY=your_openrouter_key \
+  easycalendar:latest
+```
+
 #### AI Provider 설정
 | 변수 | 설명 |
 | --- | --- |

@@ -1,0 +1,16 @@
+.DS_Store
+.env
+.env.*
+.git
+.gitignore
+.next
+.skills
+AGENTS.md
+CLAUDE.md
+Dockerfile*
+README.md
+docs
+node_modules
+npm-debug.log*
+readme_src
+tsconfig.tsbuildinfo
