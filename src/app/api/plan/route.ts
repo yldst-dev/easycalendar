@@ -2,11 +2,19 @@ import { NextResponse } from "next/server";
 import { SYSTEM_PROMPT } from "@/lib/prompts";
 import { withAttachmentContext } from "@/lib/message-utils";
 import { logAiEvent } from "@/lib/server/logger";
-import type { AiProvider, AiProviderPreference, ConversationMessage } from "@/lib/types";
+import type { AiProvider, AiProviderPreference, ConversationAttachment, ConversationMessage } from "@/lib/types";
 
 type PlanRequestBody = {
   messages?: ConversationMessage[];
   provider?: AiProviderPreference | string;
+};
+
+type NormalizedAttachment = ConversationAttachment & { base64: string | undefined };
+
+type NormalizedMessage = {
+  role: ConversationMessage["role"];
+  content: string;
+  attachments: NormalizedAttachment[];
 };
 
 function normalizePreference(
@@ -21,8 +29,49 @@ function normalizePreference(
   return fallback;
 }
 
-export async function POST(request: Request) {
+function normalizeAttachments(input: unknown): NormalizedAttachment[] {
+  if (!Array.isArray(input)) return [];
+  return input
+    .map((item) => {
+      if (!item || typeof item !== "object") return null;
+      const data = item as Record<string, unknown>;
+      const name = typeof data.name === "string" ? data.name : "attachment";
+      const type = typeof data.type === "string" ? data.type : "application/octet-stream";
+      const size = typeof data.size === "number" ? data.size : 0;
+      const base64 = typeof data.base64 === "string" ? data.base64 : undefined;
+      return {
+        id: crypto.randomUUID(),
+        name,
+        type,
+        size,
+        base64,
+      };
+    })
+    .filter((value): value is NormalizedAttachment => Boolean(value));
+}
 
+function normalizeMessages(input: unknown): NormalizedMessage[] | null {
+  if (!Array.isArray(input)) return null;
+  const normalized = input
+    .map((item) => {
+      if (!item || typeof item !== "object") return null;
+      const data = item as Record<string, unknown>;
+      const role = data.role;
+      const content = data.content;
+      if (role !== "user" && role !== "assistant" && role !== "system") return null;
+      if (typeof content !== "string") return null;
+      const attachments = normalizeAttachments(data.attachments);
+      return {
+        role,
+        content,
+        attachments,
+      };
+    })
+    .filter((value): value is NormalizedMessage => Boolean(value));
+  return normalized.length > 0 ? normalized : null;
+}
+
+export async function POST(request: Request) {
   let body: PlanRequestBody;
   try {
     body = await request.json();
@@ -33,15 +82,15 @@ export async function POST(request: Request) {
     );
   }
 
-  if (!body.messages?.length) {
+  const messages = normalizeMessages(body.messages);
+  if (!messages) {
     return NextResponse.json(
       { error: "messages array is required" },
       { status: 400 },
     );
   }
 
-  // Use vision-capable model for image processing, fallback to text-only model
-  const hasImages = body.messages.some(
+  const hasImages = messages.some(
     (msg) => msg.attachments && msg.attachments.some((att) => att.type?.startsWith("image/")),
   );
 
@@ -117,7 +166,6 @@ export async function POST(request: Request) {
     ? (provider === "groq" ? groqVisionModel : openrouterVisionModel)
     : (provider === "groq" ? groqTextModel : openrouterTextModel);
 
-  // Add current date and time context to system prompt
   const now = new Date();
   const currentDateKST = `${new Intl.DateTimeFormat("en-CA", {
     timeZone: "Asia/Seoul",
@@ -143,9 +191,7 @@ export async function POST(request: Request) {
 - 월/일만 주어지면 올해(${currentDateKST.slice(0, 4)}년)로 우선 해석하고, 이미 지난 날짜라면 다음 해로 이월하세요.
 - 사용자가 "오늘", "내일", "이번 주" 등의 상대적 날짜를 언급할 때 위의 현재 시간을 기준으로 계산하세요.`;
 
-  // Process messages to handle image attachments
-  const processedMessages = body.messages.map((message) => {
-    // Handle messages with image attachments
+  const processedMessages = messages.map((message) => {
     if (message.attachments && message.attachments.length > 0) {
       const imageAttachments = message.attachments.filter(att => att.type?.startsWith('image/'));
       if (imageAttachments.length > 0 && ('base64' in imageAttachments[0]) && imageAttachments[0].base64) {
@@ -167,7 +213,6 @@ export async function POST(request: Request) {
       }
     }
 
-    // Handle text-only messages
     return {
       role: message.role,
       content: withAttachmentContext(message.content, message.attachments),

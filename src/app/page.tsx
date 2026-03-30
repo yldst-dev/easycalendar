@@ -10,7 +10,7 @@ import {
   useState,
 } from "react";
 import Image from "next/image";
-import { ImageIcon, X as XIcon, MapPin, Trash2 } from "lucide-react";
+import { ImageIcon, X as XIcon, MapPin, Trash2, Plus } from "lucide-react";
 
 function GoogleCalendarIcon({ className }: { className?: string }) {
   return (
@@ -107,6 +107,22 @@ const PROVIDER_OPTIONS: ProviderOption[] = [
   },
 ];
 
+const REMINDER_OPTIONS = [
+  { value: 5, label: "5분 전" },
+  { value: 10, label: "10분 전" },
+  { value: 15, label: "15분 전" },
+  { value: 30, label: "30분 전" },
+  { value: 60, label: "1시간 전" },
+  { value: 120, label: "2시간 전" },
+  { value: 180, label: "3시간 전" },
+  { value: 1440, label: "1일 전" },
+  { value: 2880, label: "2일 전" },
+  { value: 4320, label: "3일 전" },
+  { value: 7200, label: "5일 전" },
+  { value: 10080, label: "7일 전" },
+];
+const DEFAULT_REMINDER_MINUTES = REMINDER_OPTIONS[0]?.value ?? 5;
+
 interface ProviderOption {
   value: AiProviderPreference;
   label: string;
@@ -127,6 +143,7 @@ function normalizeProviderPreference(
 
 export default function Home() {
   const [state, dispatch] = useReducer(plannerReducer, undefined, createInitialState);
+  const scheduleRef = useRef<ScheduleItem[]>([]);
   const [composerValue, setComposerValue] = useState("");
   const [attachments, setAttachments] = useState<ConversationAttachment[]>([]);
   const [abortController, setAbortController] = useState<AbortController | null>(
@@ -160,7 +177,6 @@ export default function Home() {
     [showToast],
   );
 
-  // 초기 로드 시 세션에서 일정 데이터 복원 (hydration 이후)
   useEffect(() => {
     const savedSchedule = loadScheduleFromSession();
     if (savedSchedule.length > 0) {
@@ -179,20 +195,31 @@ export default function Home() {
   useEffect(() => {
     const controller = new AbortController();
     fetch("/api/providers", { signal: controller.signal })
-      .then((res) => res.json())
+      .then((res) => {
+        if (!res.ok) {
+          throw new Error(`Failed to load providers: ${res.status}`);
+        }
+        return res.json();
+      })
       .then((data) => {
         setProviderAvailability({ groq: !!data.groq, openrouter: !!data.openrouter });
       })
-      .catch(() => {})
+      .catch((error) => {
+        if (error instanceof DOMException && error.name === "AbortError") return;
+        console.warn("[easycalendar] Failed to load provider availability", error);
+        setProviderAvailability({ groq: false, openrouter: false });
+      })
     return () => controller.abort();
   }, []);
 
-  // 일정 변경 시 세션 저장
   useEffect(() => {
     saveScheduleToSession(state.schedule);
   }, [state.schedule]);
 
-  // 일정이 있을 때 페이지 닫기 방지
+  useEffect(() => {
+    scheduleRef.current = state.schedule;
+  }, [state.schedule]);
+
   useEffect(() => {
     const handleBeforeUnload = (e: BeforeUnloadEvent) => {
       if (state.schedule.length > 0) {
@@ -331,7 +358,6 @@ export default function Home() {
         controller.signal,
       );
 
-      // 취소된 경우 추가 처리하지 않음
       if (controller.signal.aborted) {
         return;
       }
@@ -375,7 +401,6 @@ export default function Home() {
         showToast(`${droppedCount}개의 과거 일정은 제외되었어요.`, "info");
       }
     } catch (error) {
-      // AbortError인 경우 (사용자가 취소) 아무것도 하지 않음
       if (error instanceof Error && error.name === "AbortError") {
         return;
       }
@@ -394,7 +419,6 @@ export default function Home() {
       const message = error instanceof Error ? error.message : String(error);
       showToast(message, "error");
     } finally {
-      // 취소되지 않은 경우에만 로딩 상태 해제
       if (!controller.signal.aborted) {
         dispatch({ type: "SET_LOADING", payload: false });
         setAbortController(null);
@@ -416,7 +440,7 @@ export default function Home() {
   }, [showToast]);
 
   const handleItemChange = useCallback(
-    (id: string, field: keyof ScheduleItem, value: string | boolean | number) => {
+    (id: string, field: keyof ScheduleItem, value: string | boolean | number | number[]) => {
       const current = state.schedule.find((item) => item.id === id);
       if (!current) return;
 
@@ -465,16 +489,16 @@ export default function Home() {
       } else if (field === "location") {
         updates.location = value as string;
       } else if (field === "reminderMinutes") {
-        const minutes = typeof value === "number" ? value : Number(value);
-        if (!Number.isFinite(minutes)) {
-          return;
-        }
-        updates.reminderMinutes = Math.max(0, Math.round(minutes));
+        updates.reminderMinutes = normalizeReminderMinutesValue(value);
       }
 
       if (Object.keys(updates).length === 0) {
         return;
       }
+
+      scheduleRef.current = state.schedule.map((item) =>
+        item.id === current.id ? { ...item, ...updates } : item,
+      );
 
       dispatch({
         type: "UPDATE_SCHEDULE_ITEM",
@@ -487,16 +511,18 @@ export default function Home() {
     [showToast, state.schedule],
   );
 
+  const getLatestItem = useCallback(
+    (id: string) => scheduleRef.current.find((item) => item.id === id),
+    [],
+  );
+
   const handleRemoveItem = useCallback((id: string) => {
-    // 삭제할 아이템을 찾아서 저장
     const itemToRemove = state.schedule.find(item => item.id === id);
 
     if (!itemToRemove) return;
 
-    // 아이템 삭제
     dispatch({ type: "REMOVE_SCHEDULE_ITEM", payload: id });
 
-    // 되돌리기 기능이 있는 토스트 표시
     const undoAction = () => {
       dispatch({ type: "ADD_SCHEDULE_ITEM", payload: itemToRemove });
     };
@@ -542,7 +568,6 @@ export default function Home() {
     setAbortController(null);
     dispatch({ type: "SET_LOADING", payload: false });
 
-    // 취소 메시지를 채팅에 추가
     const cancelMessage: ConversationMessage = {
       id: crypto.randomUUID(),
       role: "assistant",
@@ -720,23 +745,26 @@ export default function Home() {
                         <ul className="flex flex-col gap-2">
                           {items.map((item) => (
                             <li key={item.id} className="rounded-2xl border border-border px-4 py-3 transition-all duration-300 ease-in-out">
-                              <div className="flex items-center justify-between gap-3">
+                              {(() => {
+                                const latest = getLatestItem(item.id) ?? item;
+                                return (
+                                  <div className="flex items-center justify-between gap-3">
                                 <div className="flex-1 space-y-1.5">
                                   <TypewriterText
-                                    text={item.title}
+                                    text={latest.title}
                                     as="span"
                                     className="block text-sm font-medium"
                                   />
                                   <TypewriterText
-                                    text={formatTimeRange(item.start, item.end, item.allDay)}
+                                    text={formatTimeRange(latest.start, latest.end, latest.allDay)}
                                     as="span"
                                     className="block text-xs text-muted-foreground"
                                   />
-                                  {item.location ? (
+                                  {latest.location ? (
                                     <div className="flex items-center gap-1 text-xs text-muted-foreground">
                                       <MapPin className="h-3.5 w-3.5" />
                                       <TypewriterText
-                                        text={item.location}
+                                        text={latest.location}
                                         as="span"
                                         className="text-xs text-muted-foreground"
                                       />
@@ -748,8 +776,11 @@ export default function Home() {
                                     <Button
                                       variant="ghost"
                                       size="sm"
-                                      onClick={() => addToGoogleCalendar(item)}
+                                      onClick={() => {
+                                        addToGoogleCalendar(latest);
+                                      }}
                                       className="h-8 w-8 p-0 hover:bg-blue-50"
+                                      aria-label="구글 캘린더에 추가"
                                     >
                                       <GoogleCalendarIcon className="h-4 w-4" />
                                     </Button>
@@ -761,7 +792,9 @@ export default function Home() {
                                     <Button
                                       variant="secondary"
                                       size="sm"
-                                      onClick={() => exportSingleItemAsIcs(item)}
+                                      onClick={() => {
+                                        exportSingleItemAsIcs(latest);
+                                      }}
                                       className="h-8 px-3 text-xs"
                                     >
                                       내보내기
@@ -772,6 +805,8 @@ export default function Home() {
                                   </Tooltip>
                                 </div>
                               </div>
+                                );
+                              })()}
                             </li>
                           ))}
                         </ul>
@@ -841,14 +876,13 @@ function TypewriterText({
 }
 
 function MessageBubble({ message }: { message: ConversationMessage }) {
-  const [formattedTime, setFormattedTime] = useState<string>("");
   const isUser = message.role === "user";
   const isAssistant = message.role === "assistant";
 
-  useEffect(() => {
-    // 클라이언트에서만 날짜 포맷팅
-    setFormattedTime(new Date(message.createdAt).toLocaleString());
-  }, [message.createdAt]);
+  const formattedTime = useMemo(
+    () => new Date(message.createdAt).toLocaleString(),
+    [message.createdAt],
+  );
 
   return (
     <article
@@ -934,7 +968,6 @@ function Composer({
   const handleDragLeave = useCallback((e: React.DragEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    // Only hide drag over state if we're leaving the container entirely
     if (!e.currentTarget.contains(e.relatedTarget as Node)) {
       setIsDragOver(false);
     }
@@ -1055,6 +1088,7 @@ function Composer({
             onClick={isLoading ? onCancel : onSubmit}
             disabled={!isLoading && (!value.trim() && !attachments.length)}
             size="icon"
+            aria-label={isLoading ? "요청 취소" : "일정 생성"}
             className={cn(
               "rounded-full transition-colors h-8 w-8 sm:h-9 sm:w-9",
               !isLoading && (!value.trim() && !attachments.length)
@@ -1142,7 +1176,7 @@ function ScheduleEditor({
   onRemove,
 }: {
   item: ScheduleItem;
-  onChange: (id: string, field: keyof ScheduleItem, value: string | boolean | number) => void;
+  onChange: (id: string, field: keyof ScheduleItem, value: string | boolean | number | number[]) => void;
   onRemove: (id: string) => void;
 }) {
   const [isExpanded, setIsExpanded] = useState(false);
@@ -1150,7 +1184,10 @@ function ScheduleEditor({
   const [draftLocation, setDraftLocation] = useState(item.location ?? "");
   const [draftDescription, setDraftDescription] = useState(item.description ?? "");
   const [draftAllDay, setDraftAllDay] = useState(Boolean(item.allDay));
-  const [draftReminder, setDraftReminder] = useState(item.reminderMinutes ?? 10);
+  const [draftReminderSlots, setDraftReminderSlots] = useState<(number | null)[]>(() => {
+    const normalized = normalizeReminderMinutesValue(item.reminderMinutes ?? []);
+    return normalized.length > 0 ? normalized : [null];
+  });
   const descriptionRef = useRef<HTMLTextAreaElement | null>(null);
 
   useEffect(() => {
@@ -1170,7 +1207,8 @@ function ScheduleEditor({
   }, [item.allDay]);
 
   useEffect(() => {
-    setDraftReminder(item.reminderMinutes ?? 10);
+    const normalized = normalizeReminderMinutesValue(item.reminderMinutes ?? []);
+    setDraftReminderSlots(normalized.length > 0 ? normalized : [null]);
   }, [item.reminderMinutes]);
 
   const updateAllDay = useCallback(
@@ -1190,9 +1228,31 @@ function ScheduleEditor({
     el.style.height = `${el.scrollHeight}px`;
   }, [draftDescription]);
 
+  const applyReminderSlots = useCallback(
+    (nextSlots: (number | null)[]) => {
+      const normalized = normalizeReminderMinutesValue(
+        nextSlots.filter((value): value is number => typeof value === "number"),
+      );
+      setDraftReminderSlots(nextSlots.length > 0 ? nextSlots : [null]);
+      onChange(item.id, "reminderMinutes", normalized);
+    },
+    [item.id, onChange],
+  );
+
   return (
     <div className="flex flex-col rounded-3xl border border-border transition-all duration-300 ease-in-out hover:border-ring/50">
-      <div className="flex items-center justify-between gap-3 cursor-pointer p-4" onClick={() => setIsExpanded(!isExpanded)}>
+      <div
+        className="flex items-center justify-between gap-3 cursor-pointer p-4"
+        role="button"
+        tabIndex={0}
+        onClick={() => setIsExpanded(!isExpanded)}
+        onKeyDown={(event) => {
+          if (event.key === "Enter" || event.key === " ") {
+            event.preventDefault();
+            setIsExpanded(!isExpanded);
+          }
+        }}
+      >
         <div className="flex-1">
           <h3 className="text-sm font-medium">
             <TypewriterText text={item.title || "제목 없음"} as="span" />
@@ -1345,56 +1405,52 @@ function ScheduleEditor({
               <Label htmlFor={`reminder-${item.id}`} className="text-xs text-muted-foreground">
                 알림
               </Label>
-              <Select
-                value={String(draftReminder)}
-                onValueChange={(val) => {
-                  const num = parseInt(val, 10);
-                  setDraftReminder(num);
-                  onChange(item.id, "reminderMinutes", num);
-                }}
-              >
-                <SelectTrigger id={`reminder-${item.id}`} className="w-full">
-                  <SelectValue placeholder="알림 시간" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="5">
-                    <SelectItemText>5분 전</SelectItemText>
-                  </SelectItem>
-                  <SelectItem value="10">
-                    <SelectItemText>10분 전</SelectItemText>
-                  </SelectItem>
-                  <SelectItem value="15">
-                    <SelectItemText>15분 전</SelectItemText>
-                  </SelectItem>
-                  <SelectItem value="30">
-                    <SelectItemText>30분 전</SelectItemText>
-                  </SelectItem>
-                  <SelectItem value="60">
-                    <SelectItemText>1시간 전</SelectItemText>
-                  </SelectItem>
-                  <SelectItem value="120">
-                    <SelectItemText>2시간 전</SelectItemText>
-                  </SelectItem>
-                  <SelectItem value="180">
-                    <SelectItemText>3시간 전</SelectItemText>
-                  </SelectItem>
-                  <SelectItem value="1440">
-                    <SelectItemText>1일 전</SelectItemText>
-                  </SelectItem>
-                  <SelectItem value="2880">
-                    <SelectItemText>2일 전</SelectItemText>
-                  </SelectItem>
-                  <SelectItem value="4320">
-                    <SelectItemText>3일 전</SelectItemText>
-                  </SelectItem>
-                  <SelectItem value="7200">
-                    <SelectItemText>5일 전</SelectItemText>
-                  </SelectItem>
-                  <SelectItem value="10080">
-                    <SelectItemText>7일 전</SelectItemText>
-                  </SelectItem>
-                </SelectContent>
-              </Select>
+              <div className="flex flex-col gap-2">
+                {draftReminderSlots.map((slot, index) => (
+                  <div key={`${item.id}-reminder-${index}`} className="flex items-center gap-2">
+                    <Select
+                      value={slot == null ? "none" : String(slot)}
+                      onValueChange={(val) => {
+                        if (val === "none") {
+                          const nextSlots = draftReminderSlots.filter((_, idx) => idx !== index);
+                          applyReminderSlots(nextSlots);
+                          return;
+                        }
+                        const num = parseInt(val, 10);
+                        const nextSlots = draftReminderSlots.slice();
+                        nextSlots[index] = Number.isFinite(num) ? num : null;
+                        applyReminderSlots(nextSlots);
+                      }}
+                    >
+                      <SelectTrigger id={`reminder-${item.id}-${index}`} className="w-full">
+                        <SelectValue placeholder="알림 시간" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="none">
+                          <SelectItemText>없음</SelectItemText>
+                        </SelectItem>
+                        {REMINDER_OPTIONS.map((option) => (
+                          <SelectItem key={option.value} value={String(option.value)}>
+                            <SelectItemText>{option.label}</SelectItemText>
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                ))}
+                {draftReminderSlots.some((slot) => typeof slot === "number") ? (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="w-fit gap-1 px-2 text-xs text-muted-foreground hover:text-foreground"
+                    onClick={() => applyReminderSlots([...draftReminderSlots, DEFAULT_REMINDER_MINUTES])}
+                  >
+                    <Plus className="h-3.5 w-3.5" />
+                    알림 추가
+                  </Button>
+                ) : null}
+              </div>
             </div>
             <div className="flex flex-col gap-1">
               <Label htmlFor={`description-${item.id}`} className="text-xs text-muted-foreground">
@@ -1411,7 +1467,6 @@ function ScheduleEditor({
                   event.target.style.height = `${event.target.scrollHeight}px`;
                 }}
                 onInput={(event) => {
-                  // 자동 높이 조절
                   const target = event.target as HTMLTextAreaElement;
                   target.style.height = "auto";
                   target.style.height = `${target.scrollHeight}px`;
@@ -1463,7 +1518,7 @@ function ProviderSelector({
         onValueChange={(next: string) => onChange(next as AiProviderPreference)}
         disabled={disabled}
       >
-        <SelectTrigger className="w-[200px] justify-between rounded-2xl">
+        <SelectTrigger className="w-[200px] justify-between rounded-2xl" aria-label="모델 제공자 선택">
           <SelectValue placeholder="모델 제공자를 선택하세요" />
         </SelectTrigger>
         <SelectContent align="end" className="min-w-[260px]">
@@ -1511,6 +1566,19 @@ function groupScheduleByDate(items: ScheduleItem[]) {
   }
 
   return Array.from(grouped.entries()).sort(([a], [b]) => Date.parse(a) - Date.parse(b));
+}
+
+function normalizeReminderMinutesValue(value: unknown): number[] {
+  const list = Array.isArray(value) ? value : [value];
+  const filtered = list
+    .map((entry) => {
+      if (typeof entry === "number") return entry;
+      if (typeof entry === "string" && entry.trim() !== "") return Number(entry);
+      return NaN;
+    })
+    .map((entry) => (Number.isFinite(entry) ? Math.round(entry) : NaN))
+    .filter((entry) => Number.isFinite(entry) && entry > 0) as number[];
+  return Array.from(new Set(filtered));
 }
 
 function formatDateLabel(date: string) {

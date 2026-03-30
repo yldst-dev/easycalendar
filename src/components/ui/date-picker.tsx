@@ -54,36 +54,60 @@ export function DateTimePicker({
     setTimeValue(format(next, "HH:mm"))
   }, [value])
 
-  const handleDateSelect = (selectedDate: Date | undefined) => {
-    if (selectedDate) {
-      const [hours, minutes] = timeValue.split(":").map(Number)
+  const buildNextDate = React.useCallback(
+    (baseDate: Date, nextTime?: string) => {
+      const time = nextTime ?? timeValue
+      const [hours, minutes] = time.split(":").map(Number)
+      const next = new Date(baseDate)
       if (!isNaN(hours) && !isNaN(minutes)) {
-        selectedDate.setHours(hours, minutes)
+        next.setHours(hours, minutes)
       } else if (!showTime) {
         const existing = date ?? new Date()
-        selectedDate.setHours(existing.getHours(), existing.getMinutes())
+        next.setHours(existing.getHours(), existing.getMinutes())
       }
-      setDate(selectedDate)
-      onChange?.(selectedDate.toISOString())
-    }
+      return next
+    },
+    [date, showTime, timeValue]
+  )
+
+  const commitValue = React.useCallback(
+    (nextDate: Date) => {
+      const nextIso = nextDate.toISOString()
+      if (value !== nextIso) {
+        onChange?.(nextIso)
+      }
+    },
+    [onChange, value]
+  )
+
+  const handleDateSelect = (selectedDate: Date | undefined) => {
+    if (!selectedDate) return
+    const next = buildNextDate(selectedDate)
+    setDate(next)
+    commitValue(next)
   }
 
   const handleTimeChange = (time: string) => {
     if (!showTime) return
     setTimeValue(time)
-    if (date) {
-      const [hours, minutes] = time.split(":").map(Number)
-      if (!isNaN(hours) && !isNaN(minutes)) {
-        const newDate = new Date(date)
-        newDate.setHours(hours, minutes)
-        setDate(newDate)
-        onChange?.(newDate.toISOString())
-      }
-    }
+    if (!date) return
+    const next = buildNextDate(date, time)
+    setDate(next)
+    commitValue(next)
   }
 
   return (
-    <Popover open={open} onOpenChange={setOpen}>
+    <Popover
+      open={open}
+      onOpenChange={(nextOpen) => {
+        setOpen(nextOpen)
+        if (open && !nextOpen && date) {
+          const next = buildNextDate(date)
+          setDate(next)
+          commitValue(next)
+        }
+      }}
+    >
       <PopoverTrigger asChild>
         <Button
           variant="secondary"

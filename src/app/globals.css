@@ -1,6 +1,6 @@
+@import url("/fonts/pretendardvariable.css");
 @import "tailwindcss";
 @import "tw-animate-css";
-@import url("/fonts/pretendardvariable.css");
 
 @custom-variant dark (&:is(.dark *));
 
@@ -175,4 +175,18 @@
 
 .typing-dots span:nth-child(3) {
   animation-delay: 0.3s;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation-duration: 0.01ms;
+    animation-iteration-count: 1;
+    transition-duration: 0.01ms;
+    scroll-behavior: auto;
+  }
+  .toast-enter,
+  .toast-exit,
+  .typing-dots span {
+    animation: none;
+  }
 }

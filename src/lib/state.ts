@@ -19,7 +19,8 @@ export const loadScheduleFromSession = (): ScheduleItem[] => {
   try {
     const stored = sessionStorage.getItem(SCHEDULE_STORAGE_KEY);
     return stored ? JSON.parse(stored) : [];
-  } catch {
+  } catch (error) {
+    console.warn("[easycalendar] Failed to load schedule from session storage", error);
     return [];
   }
 };
@@ -28,8 +29,8 @@ export const saveScheduleToSession = (schedule: ScheduleItem[]): void => {
   if (typeof window === "undefined") return;
   try {
     sessionStorage.setItem(SCHEDULE_STORAGE_KEY, JSON.stringify(schedule));
-  } catch {
-    // 저장 실패 시 무시
+  } catch (error) {
+    console.warn("[easycalendar] Failed to save schedule to session storage", error);
   }
 };
 
@@ -43,7 +44,7 @@ export const createInitialState = (): PlannerState => ({
       createdAt: new Date().toISOString(),
     },
   ],
-  schedule: [], // Start with empty schedule to avoid hydration mismatch
+  schedule: [],
   isLoading: false,
 });
 
@@ -94,7 +95,13 @@ export const plannerReducer = (
       };
     }
     case "UPDATE_SCHEDULE_ITEM": {
-      const updatedItem = action.payload as ScheduleItem;
+      let updatedItem = action.payload as ScheduleItem;
+      if (updatedItem.reminderMinutes !== undefined) {
+        updatedItem = {
+          ...updatedItem,
+          reminderMinutes: normalizeReminderMinutes(updatedItem.reminderMinutes),
+        };
+      }
       if (updatedItem.start && !isFutureOrPresent(updatedItem.start)) {
         return state;
       }
@@ -169,7 +176,7 @@ function sanitizeSchedule(items: ScheduleItem[]): ScheduleItem[] {
       return {
         ...item,
         start: nextStart,
-        reminderMinutes: item.reminderMinutes ?? 10,
+        reminderMinutes: normalizeReminderMinutes(item.reminderMinutes),
       } satisfies ScheduleItem;
     })
     .filter((item) => {
@@ -185,4 +192,15 @@ function sanitizeSchedule(items: ScheduleItem[]): ScheduleItem[] {
       }
       return ok;
     });
+}
+
+function normalizeReminderMinutes(
+  value: ScheduleItem["reminderMinutes"],
+): number[] {
+  if (value == null) return [];
+  const list = Array.isArray(value) ? value : [value];
+  const filtered = list
+    .map((entry) => (Number.isFinite(entry) ? Math.round(entry) : NaN))
+    .filter((entry) => Number.isFinite(entry) && entry > 0) as number[];
+  return Array.from(new Set(filtered));
 }

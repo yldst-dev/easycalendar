@@ -33,14 +33,12 @@ export async function requestScheduleFromAi(
   signal?: AbortSignal,
 ): Promise<AiSchedule> {
   try {
-    // Convert image files to base64 for API transmission
     const processedMessages = await Promise.all(
       messages.map(async (message) => {
         if (message.attachments && message.attachments.length > 0) {
           const processedAttachments = await Promise.all(
             message.attachments.map(async (attachment) => {
               if (attachment.type.startsWith('image/') && attachment.file) {
-                // Convert image file to base64
                 return new Promise<typeof attachment & { base64?: string }>((resolve) => {
                   const reader = new FileReader();
                   reader.onload = () => {
@@ -72,15 +70,20 @@ export async function requestScheduleFromAi(
     });
 
     if (!response.ok) {
-      const data = await response.json().catch(() => ({}));
-      const detail = typeof data.detail === "string" ? data.detail : undefined;
-      throw new Error(detail ?? data.error ?? "AI 요청에 실패했습니다.");
+      let errorPayload: unknown = {};
+      try {
+        errorPayload = await response.json();
+      } catch (parseError) {
+        console.warn("[easycalendar] Failed to parse AI error response", parseError);
+      }
+      const detail = readStringField(errorPayload, "detail");
+      const errorMessage = readStringField(errorPayload, "error");
+      throw new Error(detail ?? errorMessage ?? "AI 요청에 실패했습니다.");
     }
 
     const data = (await response.json()) as AiResponse;
     const content = data.choices?.[0]?.message?.content ?? "";
 
-    // 빈 응답 처리
     if (!content.trim()) {
       return {
         summary: "AI 응답이 비어있습니다. 다시 시도해 주세요.",
@@ -89,7 +92,6 @@ export async function requestScheduleFromAi(
     }
 
     try {
-      // Try to extract JSON from the content (AI might return extra text)
       const jsonMatch = content.match(/\{[\s\S]*\}/);
       const jsonString = jsonMatch ? jsonMatch[0] : content;
 
@@ -110,14 +112,12 @@ export async function requestScheduleFromAi(
       };
     } catch (parseError) {
       console.error("Failed to parse AI response as JSON:", content, parseError);
-      // Return a fallback response with the raw content
       return {
         summary: "응답을 처리하지 못했습니다. 다시 시도해 주세요.",
         items: [],
       };
     }
   } catch (error) {
-    // AbortError인 경우 (사용자가 취소) MOCK_PLAN 반환하지 않음
     if (error instanceof Error && error.name === "AbortError") {
       throw error;
     }
@@ -129,4 +129,10 @@ export async function requestScheduleFromAi(
 
 async function pause(duration = 650) {
   return new Promise((resolve) => setTimeout(resolve, duration));
+}
+
+function readStringField(payload: unknown, key: "detail" | "error") {
+  if (!payload || typeof payload !== "object") return undefined;
+  const value = (payload as Record<string, unknown>)[key];
+  return typeof value === "string" ? value : undefined;
 }

@@ -54,7 +54,6 @@ const TooltipContent = React.forwardRef<HTMLDivElement, TooltipContentProps>(
         {...props}
       >
         {children}
-        {/* Arrow */}
         <div
           className={cn(
             "absolute w-2 h-2 bg-gray-900 rotate-45",

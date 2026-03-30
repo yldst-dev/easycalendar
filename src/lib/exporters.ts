@@ -110,14 +110,26 @@ function escapeText(value: string) {
 }
 
 function appendValarm(lines: string[], item: ScheduleItem) {
-  const minutes = item.reminderMinutes ?? 10;
-  const normalized = Number.isFinite(minutes) ? Math.round(minutes) : 10;
-  if (normalized <= 0) return;
-  lines.push("BEGIN:VALARM");
-  lines.push("ACTION:DISPLAY");
-  lines.push(`TRIGGER:-PT${normalized}M`);
-  lines.push(`DESCRIPTION:${escapeText(item.title || "일정 알림")}`);
-  lines.push("END:VALARM");
+  const reminders = normalizeReminderMinutes(item.reminderMinutes ?? undefined);
+  if (reminders.length === 0) return;
+  reminders.forEach((minutes) => {
+    lines.push("BEGIN:VALARM");
+    lines.push("ACTION:DISPLAY");
+    lines.push(`TRIGGER:-PT${minutes}M`);
+    lines.push(`DESCRIPTION:${escapeText(item.title || "일정 알림")}`);
+    lines.push("END:VALARM");
+  });
+}
+
+function normalizeReminderMinutes(
+  value?: number[] | number | null,
+): number[] {
+  if (value == null) return [];
+  const list = Array.isArray(value) ? value : [value];
+  const filtered = list
+    .map((entry) => (Number.isFinite(entry) ? Math.round(entry) : NaN))
+    .filter((entry) => Number.isFinite(entry) && entry > 0) as number[];
+  return Array.from(new Set(filtered));
 }
 
 export function addToGoogleCalendar(item: ScheduleItem) {
@@ -137,7 +149,7 @@ export function addToGoogleCalendar(item: ScheduleItem) {
 
 function formatGoogleCalendarDate(start: string, end?: string) {
   const startDate = new Date(start);
-  const endDate = end ? new Date(end) : new Date(startDate.getTime() + 60 * 60 * 1000); // Default 1 hour duration
+  const endDate = end ? new Date(end) : new Date(startDate.getTime() + 60 * 60 * 1000);
 
   const formatDate = (date: Date) => {
     return date.toISOString().replace(/[-:]/g, "").replace(/\.\d{3}Z$/, "Z");
@@ -147,7 +159,6 @@ function formatGoogleCalendarDate(start: string, end?: string) {
 }
 
 export function addToAppleCalendar(item: ScheduleItem) {
-  // Create ICS content for Apple Calendar
   const lines = [
     "BEGIN:VCALENDAR",
     "VERSION:2.0",
@@ -179,20 +190,16 @@ export function addToAppleCalendar(item: ScheduleItem) {
   lines.push("END:VEVENT");
   lines.push("END:VCALENDAR");
 
-  // Create blob and download
   const blob = new Blob([lines.join("\r\n")], {
     type: "text/calendar",
   });
 
-  // For Apple devices, try to use the calendar:// protocol first, fallback to download
   const userAgent = navigator.userAgent.toLowerCase();
   const isAppleDevice = /iphone|ipad|ipod|macintosh|mac os x/.test(userAgent);
 
   if (isAppleDevice) {
-    // Create a temporary URL for the ICS file
     const url = URL.createObjectURL(blob);
 
-    // Create a link and trigger download/open
     const link = document.createElement("a");
     link.href = url;
     link.download = `${item.title.replace(/[^a-zA-Z0-9가-힣]/g, '_')}_apple.ics`;
@@ -201,7 +208,6 @@ export function addToAppleCalendar(item: ScheduleItem) {
     document.body.removeChild(link);
     URL.revokeObjectURL(url);
   } else {
-    // For non-Apple devices, just download the ICS file
     downloadBlob(blob, `${item.title.replace(/[^a-zA-Z0-9가-힣]/g, '_')}_apple.ics`);
   }
 }
