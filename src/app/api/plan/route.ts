@@ -95,7 +95,7 @@ export async function POST(request: Request) {
   const origin = request.headers.get("origin") ?? "https://easycalendar.local";
 
   const groqTextModel = groqTextOverride ?? "meta-llama/llama-3.3-70b-versatile";
-  const groqVisionModel = groqVisionOverride ?? groqTextOverride ?? "meta-llama/llama-4-maverick-17b-128e-instruct";
+  const groqVisionModel = groqVisionOverride ?? groqTextOverride ?? "meta-llama/llama-4-scout-17b-16e-instruct";
   const openrouterTextModel = openrouterTextOverride ?? "x-ai/grok-4-fast:free";
   const openrouterVisionModel = openrouterVisionOverride ?? openrouterTextOverride ?? "openai/gpt-4o-mini";
 

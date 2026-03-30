@@ -71,8 +71,8 @@ docker run --rm -p 3000:3000 \
 | --- | --- |
 | `PLANNER_AI_PROVIDER` | `openrouter`, `groq`, `auto` 중 선택. 기본값 `auto`는 Groq 키가 있으면 Llama 4(VLM) 모델을 우선 사용하고, 없으면 OpenRouter로 자동 폴백합니다. |
 | `NEXT_PUBLIC_DEFAULT_AI_PROVIDER` | 클라이언트 대화창 드롭다운의 기본 표시값. 보통 `PLANNER_AI_PROVIDER`와 동일하게 맞춥니다. |
-| `GROQ_API_KEY` | Groq Console에서 발급. 이미지+텍스트 모두 처리 가능한 `meta-llama/llama-4-maverick-17b-128e-instruct`가 기본입니다. |
-| `GROQ_MODEL`, `GROQ_VISION_MODEL` | 텍스트/멀티모달 모델 ID 커스터마이즈. 미설정 시 각각 70B 텍스트 모델과 Llama 4 VLM을 사용합니다. |
+| `GROQ_API_KEY` | Groq Console에서 발급. 현재 기본 Groq 비전 모델은 `meta-llama/llama-4-scout-17b-16e-instruct`입니다. |
+| `GROQ_MODEL`, `GROQ_VISION_MODEL` | 텍스트/멀티모달 모델 ID 커스터마이즈. 미설정 시 텍스트는 지정된 Groq 텍스트 모델, 비전은 Scout 모델을 사용합니다. |
 | `OPENROUTER_API_KEY` | 기존과 동일. Groq가 응답하지 않거나 auto 모드에서 키가 없을 때 사용됩니다. |
 | `OPENROUTER_MODEL`, `OPENROUTER_VISION_MODEL` | 텍스트/이미지 모델 기본값을 덮어씁니다. |
 
